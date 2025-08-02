@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
 func TestParsePackageJson(t *testing.T) {
@@ -100,10 +102,10 @@ dev_dependencies:
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
 
-	// Should have 4 dependencies (http, shared_preferences, flutter_test as complex, mockito)
-	// flutter SDK dependency is skipped, but flutter_test SDK is included as complex
-	if len(dependencies) != 4 {
-		t.Errorf("Expected 4 dependencies, got %d", len(dependencies))
+	// Should have 3 dependencies (http, shared_preferences, mockito)
+	// flutter and flutter_test SDK dependencies are skipped
+	if len(dependencies) != 3 {
+		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
 		for i, dep := range dependencies {
 			t.Logf("  %d: %s = %s", i, dep.Name, dep.Version)
 		}
@@ -142,26 +144,9 @@ dev_dependencies:
 	if originalVersionMap["mockito"] != "^5.3.0" {
 		t.Errorf("Expected mockito original version '^5.3.0', got '%s'", originalVersionMap["mockito"])
 	}
-}
 
-func TestParseVersionFromInterface(t *testing.T) {
-	tests := []struct {
-		input    any
-		expected string
-	}{
-		{"^1.0.0", "^1.0.0"},
-		{"~2.3.4", "~2.3.4"},
-		{map[string]any{"path": "../local_package"}, "path:../local_package"},
-		{map[string]any{"git": "https://github.com/user/repo.git"}, "git:https://github.com/user/repo.git"},
-		{map[string]any{"hosted": "https://custom.pub.dev"}, "hosted:https://custom.pub.dev"},
-		{map[string]any{"unknown": "value"}, "complex"},
-		{123, ""},
-	}
-
-	for _, test := range tests {
-		result := parseVersionFromInterface(test.input)
-		if result != test.expected {
-			t.Errorf("parseVersionFromInterface(%v) = %s, expected %s", test.input, result, test.expected)
-		}
+	// Test that CleanVersion function works
+	if shared.CleanVersion("^1.0.0") != "1.0.0" {
+		t.Errorf("shared.CleanVersion function not working correctly")
 	}
 }

@@ -1,4 +1,5 @@
 # Build output
+homebrew-bump
 bump
 
 # Test binary, built with `go test -c`
@@ -6,10 +7,6 @@ bump
 
 # Go workspace file
 go.work
-
-# Release artifacts
-*.tar.gz
-release-*.tar.gz
 
 # OS files
 .DS_Store
