@@ -7,5 +7,9 @@ bump
 # Go workspace file
 go.work
 
+# Release artifacts
+*.tar.gz
+release-*.tar.gz
+
 # OS files
 .DS_Store
