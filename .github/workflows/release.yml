@@ -7,8 +7,8 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Prevent circular triggers when the bot commits formula updates
-    if: github.event.head_commit.author.email != 'github-actions[bot]@users.noreply.github.com'
+    # Prevent circular triggers when merging formula update PRs
+    if: "!contains(github.event.head_commit.message, 'Update Homebrew formula for release')"
     permissions:
       contents: write
       pull-requests: write
