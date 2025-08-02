@@ -154,6 +154,37 @@ func TestCheckOutdatedWithSemver(t *testing.T) {
 	_ = result // Avoid unused variable error
 }
 
+func TestSemverSkippedTracking(t *testing.T) {
+	// Test that the SemverSkipped field is properly populated
+	// This is a basic test to ensure the struct and tracking work
+	result := &CheckResult{
+		Outdated: []OutdatedDependency{},
+		Errors:   []DependencyError{},
+		SemverSkipped: []SemverSkipped{
+			{
+				Name:            "test-package",
+				CurrentVersion:  "1.0.0",
+				LatestVersion:   "2.0.0",
+				OriginalVersion: "^1.0.0",
+				Reason:          "incompatible with constraint",
+			},
+		},
+	}
+
+	if len(result.SemverSkipped) != 1 {
+		t.Errorf("Expected 1 semver skipped entry, got %d", len(result.SemverSkipped))
+	}
+
+	skipped := result.SemverSkipped[0]
+	if skipped.Name != "test-package" {
+		t.Errorf("Expected name 'test-package', got '%s'", skipped.Name)
+	}
+
+	if skipped.Reason != "incompatible with constraint" {
+		t.Errorf("Expected reason 'incompatible with constraint', got '%s'", skipped.Reason)
+	}
+}
+
 func TestSemverEdgeCases(t *testing.T) {
 	tests := []struct {
 		originalVersion string

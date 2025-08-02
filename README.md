@@ -9,6 +9,7 @@ A Go utility that parses `package.json` and `pubspec.yaml` files to check and up
 - Check for outdated dependencies
 - Update dependencies to their latest versions
 - Preserve version prefixes (^, ~, >=, etc.)
+- Optionally check for updates while respecting semver constraints
 - Verbose output option
 
 ## Installation

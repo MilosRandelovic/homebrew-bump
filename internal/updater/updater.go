@@ -25,14 +25,24 @@ type OutdatedDependency struct {
 
 // CheckResult contains the results of checking dependencies
 type CheckResult struct {
-	Outdated []OutdatedDependency
-	Errors   []DependencyError
+	Outdated      []OutdatedDependency
+	Errors        []DependencyError
+	SemverSkipped []SemverSkipped
 }
 
 // DependencyError represents an error that occurred while checking a dependency
 type DependencyError struct {
 	Name  string
 	Error string
+}
+
+// SemverSkipped represents a dependency that was skipped due to semver constraints
+type SemverSkipped struct {
+	Name            string
+	CurrentVersion  string
+	LatestVersion   string
+	OriginalVersion string
+	Reason          string
 }
 
 // NpmPackageInfo represents the response from NPM registry
@@ -63,6 +73,7 @@ func CheckOutdated(dependencies []parser.Dependency, fileType string, verbose bo
 func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string, verbose bool, semver bool, progressCallback func(int, int)) (*CheckResult, error) {
 	var outdated []OutdatedDependency
 	var errors []DependencyError
+	var semverSkipped []SemverSkipped
 	total := len(dependencies)
 
 	for i, dep := range dependencies {
@@ -84,6 +95,14 @@ func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string
 			if verbose {
 				fmt.Printf("Skipping hardcoded version: %s (%s)\n", dep.Name, dep.OriginalVersion)
 			}
+			// We don't need to fetch the latest version for hardcoded versions
+			semverSkipped = append(semverSkipped, SemverSkipped{
+				Name:            dep.Name,
+				CurrentVersion:  dep.Version,
+				LatestVersion:   "", // Not fetched
+				OriginalVersion: dep.OriginalVersion,
+				Reason:          "hardcoded version",
+			})
 			continue
 		}
 
@@ -107,6 +126,13 @@ func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string
 					fmt.Printf("Skipping %s: latest version %s not compatible with constraint %s\n",
 						dep.Name, latestVersion, dep.OriginalVersion)
 				}
+				semverSkipped = append(semverSkipped, SemverSkipped{
+					Name:            dep.Name,
+					CurrentVersion:  currentVersion,
+					LatestVersion:   latestVersion,
+					OriginalVersion: dep.OriginalVersion,
+					Reason:          "incompatible with constraint",
+				})
 				continue
 			}
 
@@ -120,8 +146,9 @@ func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string
 	}
 
 	return &CheckResult{
-		Outdated: outdated,
-		Errors:   errors,
+		Outdated:      outdated,
+		Errors:        errors,
+		SemverSkipped: semverSkipped,
 	}, nil
 }
 

@@ -135,8 +135,9 @@ func main() {
 
 	outdated := result.Outdated
 	errors := result.Errors
+	semverSkipped := result.SemverSkipped
 
-	if len(outdated) == 0 && len(errors) == 0 {
+	if len(outdated) == 0 && len(errors) == 0 && (!*semver || len(semverSkipped) == 0) {
 		fmt.Println("\nAll dependencies are up to date!")
 		return
 	}
@@ -169,12 +170,28 @@ func main() {
 			color, latestVersion, ColorReset)
 	}
 
+	// Display semver skipped summary if in semver mode and there were skipped packages
+	if *semver && len(semverSkipped) > 0 {
+		if *verbose {
+			fmt.Printf("\nPackages skipped due to semver constraints:\n")
+			for _, skipped := range semverSkipped {
+				if skipped.LatestVersion != "" {
+					fmt.Printf("  %s%s%s: %s → %s (%s)\n", ColorCyan, skipped.Name, ColorReset, skipped.OriginalVersion, skipped.LatestVersion, skipped.Reason)
+				} else {
+					fmt.Printf("  %s%s%s: %s (%s)\n", ColorCyan, skipped.Name, ColorReset, skipped.OriginalVersion, skipped.Reason)
+				}
+			}
+		} else {
+			fmt.Printf("\n%d packages were skipped due to updates not meeting semver constraints. Run 'bump -semver -verbose' to see the full output.\n", len(semverSkipped))
+		}
+	}
+
 	// Display error summary if there were errors
 	if len(errors) > 0 {
 		if *verbose {
 			fmt.Printf("\nErrors encountered:\n")
 			for _, depErr := range errors {
-				fmt.Printf("  %s: %s\n", depErr.Name, depErr.Error)
+				fmt.Printf("  %s%s%s: %s\n", ColorCyan, depErr.Name, ColorReset, depErr.Error)
 			}
 		} else {
 			fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
