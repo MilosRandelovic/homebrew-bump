@@ -5,10 +5,11 @@ A Go utility that parses `package.json` and `pubspec.yaml` files to check and up
 ## Features
 
 - Parse `package.json` files (NPM dependencies)
-- Parse `pubspec.yaml` files (Dart/Flutter dependencies)
+- Parse `pubspec.yaml` files (Dart/Flutter pub dependencies)
 - Check for outdated dependencies
 - Update dependencies to their latest versions
 - Preserve version prefixes (^, ~, >=, etc.)
+- Optionally check for updates while respecting semver constraints
 - Verbose output option
 
 ## Installation
@@ -49,6 +50,20 @@ bump -update
 bump -u
 ```
 
+### Respect semver constraints
+
+```bash
+bump -semver
+# or
+bump -s
+```
+
+This mode will:
+
+- Only show updates that are compatible with version constraints (`^` and `~`)
+- Skip packages with hardcoded versions (no prefix)
+- Skip updates that would violate semver rules
+
 ### Enable verbose output
 
 ```bash
@@ -63,6 +78,16 @@ bump -v
 bump -update -verbose
 # or
 bump -u -v
+
+# Update with semver constraints
+bump -update -semver
+# or
+bump -u -s
+
+# Check with semver constraints and verbose output
+bump -semver -verbose
+# or
+bump -s -v
 ```
 
 ### Show version
@@ -76,6 +101,7 @@ bump -V
 ## Command Line Options
 
 - `-update, -u`: Update dependencies to latest versions
+- `-semver, -s`: Respect semver constraints (^, ~) and skip hardcoded versions
 - `-verbose, -v`: Enable verbose output
 - `-version, -V`: Show version information
 - `-help, -h`: Show help information

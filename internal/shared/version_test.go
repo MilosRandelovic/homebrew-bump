@@ -1,9 +1,7 @@
-package updater
+package shared
 
 import (
 	"testing"
-
-	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
 func TestCleanVersion(t *testing.T) {
@@ -20,7 +18,7 @@ func TestCleanVersion(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := shared.CleanVersion(test.input)
+		result := CleanVersion(test.input)
 		if result != test.expected {
 			t.Errorf("CleanVersion(%s) = %s, expected %s", test.input, result, test.expected)
 		}
@@ -41,7 +39,7 @@ func TestGetVersionPrefix(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := shared.GetVersionPrefix(test.input)
+		result := GetVersionPrefix(test.input)
 		if result != test.expected {
 			t.Errorf("GetVersionPrefix(%s) = %s, expected %s", test.input, result, test.expected)
 		}
@@ -51,24 +49,24 @@ func TestGetVersionPrefix(t *testing.T) {
 func TestParseSemanticVersion(t *testing.T) {
 	tests := []struct {
 		input    string
-		expected *shared.SemanticVersion
+		expected *SemanticVersion
 		hasError bool
 	}{
-		{"1.0.0", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
-		{"2.3.4", &shared.SemanticVersion{Major: 2, Minor: 3, Patch: 4}, false},
-		{"0.1.2", &shared.SemanticVersion{Major: 0, Minor: 1, Patch: 2}, false},
-		{"10.20.30", &shared.SemanticVersion{Major: 10, Minor: 20, Patch: 30}, false},
-		{"1.0.0-beta", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
-		{"2.3.4-alpha.1", &shared.SemanticVersion{Major: 2, Minor: 3, Patch: 4}, false},
-		{"1.0.0+build.1", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
-		{"1.0.0-beta+build.1", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
+		{"1.0.0", &SemanticVersion{1, 0, 0}, false},
+		{"2.3.4", &SemanticVersion{2, 3, 4}, false},
+		{"0.1.2", &SemanticVersion{0, 1, 2}, false},
+		{"10.20.30", &SemanticVersion{10, 20, 30}, false},
+		{"1.0.0-beta", &SemanticVersion{1, 0, 0}, false},
+		{"2.3.4-alpha.1", &SemanticVersion{2, 3, 4}, false},
+		{"1.0.0+build.1", &SemanticVersion{1, 0, 0}, false},
+		{"1.0.0-beta+build.1", &SemanticVersion{1, 0, 0}, false},
 		{"invalid", nil, true},
 		{"1.0", nil, true},
 		{"1.0.x", nil, true},
 	}
 
 	for _, test := range tests {
-		result, err := shared.ParseSemanticVersion(test.input)
+		result, err := ParseSemanticVersion(test.input)
 		if test.hasError {
 			if err == nil {
 				t.Errorf("ParseSemanticVersion(%s) expected error but got none", test.input)
@@ -121,39 +119,10 @@ func TestIsSemverCompatible(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := shared.IsSemverCompatible(test.originalVersion, test.latestVersion)
+		result := IsSemverCompatible(test.originalVersion, test.latestVersion)
 		if result != test.expected {
 			t.Errorf("%s: IsSemverCompatible(%s, %s) = %v, expected %v",
 				test.description, test.originalVersion, test.latestVersion, result, test.expected)
 		}
-	}
-}
-
-func TestSemverSkippedTracking(t *testing.T) {
-	// Test that the SemverSkipped field is properly populated
-	// This is a basic test to ensure the struct and tracking work
-	result := &shared.CheckResult{
-		SemverSkipped: []shared.SemverSkipped{
-			{
-				Name:            "test-package",
-				CurrentVersion:  "1.0.0",
-				LatestVersion:   "2.0.0",
-				OriginalVersion: "^1.0.0",
-				Reason:          "incompatible with constraint",
-			},
-		},
-	}
-
-	if len(result.SemverSkipped) != 1 {
-		t.Errorf("Expected 1 semver skipped entry, got %d", len(result.SemverSkipped))
-	}
-
-	skipped := result.SemverSkipped[0]
-	if skipped.Name != "test-package" {
-		t.Errorf("Expected name 'test-package', got '%s'", skipped.Name)
-	}
-
-	if skipped.Reason != "incompatible with constraint" {
-		t.Errorf("Expected reason 'incompatible with constraint', got '%s'", skipped.Reason)
 	}
 }
