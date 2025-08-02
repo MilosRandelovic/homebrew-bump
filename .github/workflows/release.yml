@@ -109,14 +109,19 @@ jobs:
         echo "- URL: https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz"
         echo "- SHA256: $SHA256"
 
-    - name: Commit and push formula update
-      run: |
-        git add Formula/bump.rb
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-        else
-          git commit -m "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
-          git push origin main
-        fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create Pull Request for formula update
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
+        title: "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
+        body: |
+          Automated update of the Homebrew formula for release ${{ steps.version.outputs.tag }}.
+
+          Changes:
+          - Updated URL to point to ${{ steps.version.outputs.tag }} release
+          - Updated SHA256 hash
+
+          This PR was automatically created by the release workflow.
+        branch: update-formula-${{ steps.version.outputs.tag }}
+        delete-branch: true
