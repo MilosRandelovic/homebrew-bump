@@ -24,7 +24,6 @@ const (
 	ColorYellow = "\033[33m" // Minor version changes
 	ColorGreen  = "\033[32m" // Patch version changes
 	ColorCyan   = "\033[36m" // Package names
-	ColorBlue   = "\033[34m" // Arrows
 )
 
 // SemverChange represents the type of version change
@@ -38,14 +37,14 @@ const (
 
 func main() {
 	var (
-		update      = flag.Bool("update", false, "Update dependencies to latest versions")
-		updateShort = flag.Bool("u", false, "Update dependencies to latest versions (shorthand)")
-		verbose     = flag.Bool("verbose", false, "Enable verbose output")
+		update       = flag.Bool("update", false, "Update dependencies to latest versions")
+		updateShort  = flag.Bool("u", false, "Update dependencies to latest versions (shorthand)")
+		verbose      = flag.Bool("verbose", false, "Enable verbose output")
 		verboseShort = flag.Bool("v", false, "Enable verbose output (shorthand)")
-		showVersion = flag.Bool("version", false, "Show version information")
+		showVersion  = flag.Bool("version", false, "Show version information")
 		versionShort = flag.Bool("V", false, "Show version information (shorthand)")
-		help        = flag.Bool("help", false, "Show help information")
-		helpShort   = flag.Bool("h", false, "Show help information (shorthand)")
+		help         = flag.Bool("help", false, "Show help information")
+		helpShort    = flag.Bool("h", false, "Show help information (shorthand)")
 	)
 	flag.Parse()
 
@@ -114,52 +113,81 @@ func main() {
 	// Always check for outdated dependencies
 	fmt.Printf("Checking %d dependencies from %s...\n", len(dependencies), fileName)
 
-	progressCallback := func(current, total int) {
-		printProgressBar(current, total)
+	var progressCallback func(current, total int)
+	if !*verbose {
+		progressCallback = func(current, total int) {
+			printProgressBar(current, total)
+		}
 	}
 
-	outdated, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, progressCallback)
+	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, progressCallback)
 	if err != nil {
 		log.Fatalf("Error checking for updates: %v", err)
 	}
 
-	if len(outdated) == 0 {
-		fmt.Println("All dependencies are up to date!")
+	outdated := result.Outdated
+	errors := result.Errors
+
+	if len(outdated) == 0 && len(errors) == 0 {
+		fmt.Println("\nAll dependencies are up to date!")
 		return
 	}
 
-	fmt.Printf("\n") // Add space after progress bar
+	if !*verbose {
+		fmt.Printf("\n") // Add space after progress bar only in non-verbose mode
+	}
 
 	// Sort outdated dependencies alphabetically by name
 	sort.Slice(outdated, func(i, j int) bool {
 		return outdated[i].Name < outdated[j].Name
 	})
 
+	if *verbose && len(outdated) > 0 {
+		fmt.Printf("\nFound %d outdated dependencies:\n", len(outdated))
+	}
+
 	// Display results with colors and proper formatting
 	for _, dep := range outdated {
 		change := getSemverChange(dep.CurrentVersion, dep.LatestVersion)
 		color := getChangeColor(change)
 
-		// Get the original version prefixes
-		currentWithPrefix := getOriginalVersionString(dep.Name, filePath, fileType)
-		latestWithPrefix := strings.Replace(currentWithPrefix, dep.CurrentVersion, dep.LatestVersion, 1)
+		// Use the original version from the dependency struct
+		currentVersion := dep.OriginalVersion
+		latestVersion := strings.Replace(currentVersion, dep.CurrentVersion, dep.LatestVersion, 1)
 
-		// Format output similar to ncu - only color the latest version
-		fmt.Printf(" %s%-30s%s  %15s  →  %s%15s%s\n",
+		fmt.Printf("%s%-30s%s  %15s  →  %s%15s%s\n",
 			ColorCyan, dep.Name, ColorReset,
-			currentWithPrefix,
-			color, latestWithPrefix, ColorReset)
+			currentVersion,
+			color, latestVersion, ColorReset)
+	}
+
+	// Display error summary if there were errors
+	if len(errors) > 0 {
+		if *verbose {
+			fmt.Printf("\nErrors encountered:\n")
+			for _, depErr := range errors {
+				fmt.Printf("  %s: %s\n", depErr.Name, depErr.Error)
+			}
+		} else {
+			fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
+		}
 	}
 
 	// Update if requested
 	if *update {
-		err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose)
-		if err != nil {
-			log.Fatalf("Error updating dependencies: %v", err)
+		if len(outdated) > 0 {
+			err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose)
+			if err != nil {
+				log.Fatalf("\nError updating dependencies: %v", err)
+			}
+			fmt.Println("\nDependencies updated successfully!")
+		} else {
+			fmt.Println("\nNo dependencies to update.")
 		}
-		fmt.Println("Dependencies updated successfully!")
 	} else {
-		fmt.Printf("\nRun 'bump -update' to update dependencies to latest versions.\n")
+		if len(outdated) > 0 {
+			fmt.Printf("\nRun 'bump -update' to update dependencies to latest versions.\n")
+		}
 	}
 }
 
@@ -226,11 +254,9 @@ func getSemverChange(currentVer, latestVer string) SemverChange {
 
 	if latestMajor > currMajor {
 		return MajorChange
-	}
-	if latestMinor > currMinor {
+	} else if latestMinor > currMinor {
 		return MinorChange
-	}
-	if latestPatch > currPatch {
+	} else if latestPatch > currPatch {
 		return PatchChange
 	}
 
@@ -251,30 +277,6 @@ func getChangeColor(change SemverChange) string {
 	}
 }
 
-// getOriginalVersionString retrieves the original version string with prefixes from the file
-func getOriginalVersionString(packageName, filePath, fileType string) string {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return ""
-	}
-
-	content := string(data)
-
-	// Escape special regex characters in package name
-	escapedName := regexp.QuoteMeta(packageName)
-
-	// Pattern to match the dependency line: "package-name": "version"
-	pattern := fmt.Sprintf(`"%s"\s*:\s*"([^"]*)"`, escapedName)
-	re := regexp.MustCompile(pattern)
-
-	matches := re.FindStringSubmatch(content)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-
-	return ""
-}
-
 // printProgressBar prints a progress bar
 func printProgressBar(current, total int) {
 	const barWidth = 20
@@ -282,7 +284,7 @@ func printProgressBar(current, total int) {
 	filled := int(progress * barWidth)
 
 	bar := "["
-	for i := 0; i < barWidth; i++ {
+	for i := range barWidth {
 		if i < filled {
 			bar += "="
 		} else {

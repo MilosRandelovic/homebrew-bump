@@ -2,6 +2,8 @@ package updater
 
 import (
 	"testing"
+
+	"github.com/MilosRandelovic/homebrew-bump/internal/parser"
 )
 
 func TestCleanVersion(t *testing.T) {
@@ -16,11 +18,11 @@ func TestCleanVersion(t *testing.T) {
 		{"1.5.0", "1.5.0"},
 		{"^>=1.0.0", "1.0.0"},
 	}
-	
+
 	for _, test := range tests {
-		result := cleanVersion(test.input)
+		result := parser.CleanVersion(test.input)
 		if result != test.expected {
-			t.Errorf("cleanVersion(%s) = %s, expected %s", test.input, result, test.expected)
+			t.Errorf("CleanVersion(%s) = %s, expected %s", test.input, result, test.expected)
 		}
 	}
 }
@@ -37,7 +39,7 @@ func TestGetVersionPrefix(t *testing.T) {
 		{"1.5.0", ""},
 		{"^>=1.0.0", "^>="},
 	}
-	
+
 	for _, test := range tests {
 		result := getVersionPrefix(test.input)
 		if result != test.expected {

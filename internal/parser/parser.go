@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Dependency represents a package dependency
 type Dependency struct {
-	Name    string
-	Version string
+	Name            string
+	Version         string // Clean version for API calls (e.g., "1.2.3")
+	OriginalVersion string // Original version with prefixes (e.g., "^1.2.3")
 }
 
 // PackageJson represents the structure of a package.json file
@@ -22,8 +24,8 @@ type PackageJson struct {
 
 // PubspecYaml represents the structure of a pubspec.yaml file
 type PubspecYaml struct {
-	Dependencies    map[string]interface{} `yaml:"dependencies,omitempty"`
-	DevDependencies map[string]interface{} `yaml:"dev_dependencies,omitempty"`
+	Dependencies    map[string]any `yaml:"dependencies,omitempty"`
+	DevDependencies map[string]any `yaml:"dev_dependencies,omitempty"`
 }
 
 // ParseDependencies parses dependencies from a file based on its type
@@ -55,16 +57,18 @@ func parsePackageJson(filePath string) ([]Dependency, error) {
 	// Parse regular dependencies
 	for name, version := range pkg.Dependencies {
 		dependencies = append(dependencies, Dependency{
-			Name:    name,
-			Version: version,
+			Name:            name,
+			Version:         CleanVersion(version),
+			OriginalVersion: version,
 		})
 	}
 
 	// Parse dev dependencies
 	for name, version := range pkg.DevDependencies {
 		dependencies = append(dependencies, Dependency{
-			Name:    name,
-			Version: version,
+			Name:            name,
+			Version:         CleanVersion(version),
+			OriginalVersion: version,
 		})
 	}
 
@@ -95,8 +99,9 @@ func parsePubspecYaml(filePath string) ([]Dependency, error) {
 		version := parseVersionFromInterface(versionInterface)
 		if version != "" {
 			dependencies = append(dependencies, Dependency{
-				Name:    name,
-				Version: version,
+				Name:            name,
+				Version:         CleanVersion(version),
+				OriginalVersion: version,
 			})
 		}
 	}
@@ -106,8 +111,9 @@ func parsePubspecYaml(filePath string) ([]Dependency, error) {
 		version := parseVersionFromInterface(versionInterface)
 		if version != "" {
 			dependencies = append(dependencies, Dependency{
-				Name:    name,
-				Version: version,
+				Name:            name,
+				Version:         CleanVersion(version),
+				OriginalVersion: version,
 			})
 		}
 	}
@@ -121,7 +127,7 @@ func parseVersionFromInterface(versionInterface interface{}) string {
 	switch v := versionInterface.(type) {
 	case string:
 		return v
-	case map[string]interface{}:
+	case map[string]any:
 		// Handle git dependencies or other complex version specifications
 		if path, ok := v["path"]; ok {
 			return fmt.Sprintf("path:%v", path)
@@ -136,4 +142,10 @@ func parseVersionFromInterface(versionInterface interface{}) string {
 	default:
 		return ""
 	}
+}
+
+// CleanVersion removes prefix characters (^, ~, >=, etc.) from version strings
+func CleanVersion(version string) string {
+	re := regexp.MustCompile(`^[\^~>=<]+`)
+	return re.ReplaceAllString(version, "")
 }

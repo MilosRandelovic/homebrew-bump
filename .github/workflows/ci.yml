@@ -18,6 +18,18 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Check formatting
+      run: |
+        if [ "$(gofmt -l .)" != "" ]; then
+          echo "The following files are not properly formatted:"
+          gofmt -l .
+          echo "Please run 'gofmt -w .' to fix formatting issues."
+          exit 1
+        fi
+
+    - name: Run go vet
+      run: go vet ./...
+
     - name: Run tests
       run: go test -v ./...
 

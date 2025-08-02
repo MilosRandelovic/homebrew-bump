@@ -16,9 +16,22 @@ import (
 
 // OutdatedDependency represents a dependency that has a newer version available
 type OutdatedDependency struct {
-	Name           string
-	CurrentVersion string
-	LatestVersion  string
+	Name            string
+	CurrentVersion  string
+	LatestVersion   string
+	OriginalVersion string // Original version with prefixes (e.g., "^1.2.3")
+}
+
+// CheckResult contains the results of checking dependencies
+type CheckResult struct {
+	Outdated []OutdatedDependency
+	Errors   []DependencyError
+}
+
+// DependencyError represents an error that occurred while checking a dependency
+type DependencyError struct {
+	Name  string
+	Error string
 }
 
 // NpmPackageInfo represents the response from NPM registry
@@ -38,12 +51,14 @@ type PubDevPackageInfo struct {
 
 // CheckOutdated checks which dependencies have newer versions available
 func CheckOutdated(dependencies []parser.Dependency, fileType string, verbose bool) ([]OutdatedDependency, error) {
-	return CheckOutdatedWithProgress(dependencies, fileType, verbose, nil)
+	result, err := CheckOutdatedWithProgress(dependencies, fileType, verbose, nil)
+	return result.Outdated, err
 }
 
 // CheckOutdatedWithProgress checks which dependencies have newer versions available with progress callback
-func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string, verbose bool, progressCallback func(int, int)) ([]OutdatedDependency, error) {
+func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string, verbose bool, progressCallback func(int, int)) (*CheckResult, error) {
 	var outdated []OutdatedDependency
+	var errors []DependencyError
 	total := len(dependencies)
 
 	for i, dep := range dependencies {
@@ -54,27 +69,39 @@ func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string
 
 		// Skip complex dependencies (git, path, etc.)
 		if strings.HasPrefix(dep.Version, "git:") || strings.HasPrefix(dep.Version, "path:") || dep.Version == "complex" {
-			// Silently skip complex dependencies during progress mode
+			if verbose {
+				fmt.Printf("Skipping complex dependency: %s (%s)\n", dep.Name, dep.Version)
+			}
 			continue
 		}
 
-		latestVersion, err := getLatestVersion(dep.Name, fileType, false) // Don't use verbose here to avoid interfering with progress bar
+		latestVersion, err := getLatestVersion(dep.Name, fileType, verbose)
 		if err != nil {
-			// Silently continue on error during progress mode
+			errors = append(errors, DependencyError{
+				Name:  dep.Name,
+				Error: err.Error(),
+			})
+			if verbose {
+				fmt.Printf("Error checking %s: %v\n", dep.Name, err)
+			}
 			continue
 		}
 
-		currentVersion := cleanVersion(dep.Version)
+		currentVersion := dep.Version // Already cleaned in parser
 		if currentVersion != latestVersion && latestVersion != "" {
 			outdated = append(outdated, OutdatedDependency{
-				Name:           dep.Name,
-				CurrentVersion: currentVersion,
-				LatestVersion:  latestVersion,
+				Name:            dep.Name,
+				CurrentVersion:  currentVersion,
+				LatestVersion:   latestVersion,
+				OriginalVersion: dep.OriginalVersion,
 			})
 		}
 	}
 
-	return outdated, nil
+	return &CheckResult{
+		Outdated: outdated,
+		Errors:   errors,
+	}, nil
 }
 
 // getLatestVersion fetches the latest version of a package
@@ -155,13 +182,6 @@ func getPubDevLatestVersion(packageName string, verbose bool) (string, error) {
 	}
 
 	return packageInfo.Latest.Version, nil
-}
-
-// cleanVersion removes version prefixes like ^, ~, >=, etc.
-func cleanVersion(version string) string {
-	// Remove common version prefixes
-	re := regexp.MustCompile(`^[\^~>=<]+`)
-	return re.ReplaceAllString(version, "")
 }
 
 // UpdateDependencies updates the dependencies in the file

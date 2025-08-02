@@ -35,22 +35,38 @@ func TestParsePackageJson(t *testing.T) {
 		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
 	}
 
-	// Check specific dependencies
-	depMap := make(map[string]string)
+	// Check specific dependencies - create maps for both clean and original versions
+	cleanVersionMap := make(map[string]string)
+	originalVersionMap := make(map[string]string)
 	for _, dep := range dependencies {
-		depMap[dep.Name] = dep.Version
+		cleanVersionMap[dep.Name] = dep.Version
+		originalVersionMap[dep.Name] = dep.OriginalVersion
 	}
 
-	if depMap["react"] != "^18.0.0" {
-		t.Errorf("Expected react version '^18.0.0', got '%s'", depMap["react"])
+	// Check clean versions (without prefixes)
+	if cleanVersionMap["react"] != "18.0.0" {
+		t.Errorf("Expected react clean version '18.0.0', got '%s'", cleanVersionMap["react"])
 	}
 
-	if depMap["lodash"] != "~4.17.20" {
-		t.Errorf("Expected lodash version '~4.17.20', got '%s'", depMap["lodash"])
+	if cleanVersionMap["lodash"] != "4.17.20" {
+		t.Errorf("Expected lodash clean version '4.17.20', got '%s'", cleanVersionMap["lodash"])
 	}
 
-	if depMap["typescript"] != ">=4.9.0" {
-		t.Errorf("Expected typescript version '>=4.9.0', got '%s'", depMap["typescript"])
+	if cleanVersionMap["typescript"] != "4.9.0" {
+		t.Errorf("Expected typescript clean version '4.9.0', got '%s'", cleanVersionMap["typescript"])
+	}
+
+	// Check original versions (with prefixes)
+	if originalVersionMap["react"] != "^18.0.0" {
+		t.Errorf("Expected react original version '^18.0.0', got '%s'", originalVersionMap["react"])
+	}
+
+	if originalVersionMap["lodash"] != "~4.17.20" {
+		t.Errorf("Expected lodash original version '~4.17.20', got '%s'", originalVersionMap["lodash"])
+	}
+
+	if originalVersionMap["typescript"] != ">=4.9.0" {
+		t.Errorf("Expected typescript original version '>=4.9.0', got '%s'", originalVersionMap["typescript"])
 	}
 }
 
@@ -93,36 +109,52 @@ dev_dependencies:
 		}
 	}
 
-	// Check specific dependencies
-	depMap := make(map[string]string)
+	// Check specific dependencies - create maps for both clean and original versions
+	cleanVersionMap := make(map[string]string)
+	originalVersionMap := make(map[string]string)
 	for _, dep := range dependencies {
-		depMap[dep.Name] = dep.Version
+		cleanVersionMap[dep.Name] = dep.Version
+		originalVersionMap[dep.Name] = dep.OriginalVersion
 	}
 
-	if depMap["http"] != "^0.13.0" {
-		t.Errorf("Expected http version '^0.13.0', got '%s'", depMap["http"])
+	// Check clean versions (without prefixes)
+	if cleanVersionMap["http"] != "0.13.0" {
+		t.Errorf("Expected http clean version '0.13.0', got '%s'", cleanVersionMap["http"])
 	}
 
-	if depMap["shared_preferences"] != "^2.0.0" {
-		t.Errorf("Expected shared_preferences version '^2.0.0', got '%s'", depMap["shared_preferences"])
+	if cleanVersionMap["shared_preferences"] != "2.0.0" {
+		t.Errorf("Expected shared_preferences clean version '2.0.0', got '%s'", cleanVersionMap["shared_preferences"])
 	}
 
-	if depMap["mockito"] != "^5.3.0" {
-		t.Errorf("Expected mockito version '^5.3.0', got '%s'", depMap["mockito"])
+	if cleanVersionMap["mockito"] != "5.3.0" {
+		t.Errorf("Expected mockito clean version '5.3.0', got '%s'", cleanVersionMap["mockito"])
+	}
+
+	// Check original versions (with prefixes)
+	if originalVersionMap["http"] != "^0.13.0" {
+		t.Errorf("Expected http original version '^0.13.0', got '%s'", originalVersionMap["http"])
+	}
+
+	if originalVersionMap["shared_preferences"] != "^2.0.0" {
+		t.Errorf("Expected shared_preferences original version '^2.0.0', got '%s'", originalVersionMap["shared_preferences"])
+	}
+
+	if originalVersionMap["mockito"] != "^5.3.0" {
+		t.Errorf("Expected mockito original version '^5.3.0', got '%s'", originalVersionMap["mockito"])
 	}
 }
 
 func TestParseVersionFromInterface(t *testing.T) {
 	tests := []struct {
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{"^1.0.0", "^1.0.0"},
 		{"~2.3.4", "~2.3.4"},
-		{map[string]interface{}{"path": "../local_package"}, "path:../local_package"},
-		{map[string]interface{}{"git": "https://github.com/user/repo.git"}, "git:https://github.com/user/repo.git"},
-		{map[string]interface{}{"hosted": "https://custom.pub.dev"}, "hosted:https://custom.pub.dev"},
-		{map[string]interface{}{"unknown": "value"}, "complex"},
+		{map[string]any{"path": "../local_package"}, "path:../local_package"},
+		{map[string]any{"git": "https://github.com/user/repo.git"}, "git:https://github.com/user/repo.git"},
+		{map[string]any{"hosted": "https://custom.pub.dev"}, "hosted:https://custom.pub.dev"},
+		{map[string]any{"unknown": "value"}, "complex"},
 		{123, ""},
 	}
 

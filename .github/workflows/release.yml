@@ -69,7 +69,7 @@ jobs:
         if [ -n "$PREVIOUS_TAG" ]; then
           NOTES=$(git log --no-merges --pretty=format:"- %s %h" ${PREVIOUS_TAG}..HEAD)
         else
-          NOTES=$(git log --no-merges --pretty=format:"- %s %h" -10)
+          NOTES=$(git log --no-merges --pretty=format:"- %s %h" -50)
         fi
 
         echo "notes<<EOF" >> $GITHUB_OUTPUT
