@@ -61,15 +61,6 @@ jobs:
         git tag "${{ steps.version.outputs.tag }}"
         git push origin "${{ steps.version.outputs.tag }}"
 
-    - name: Create release assets
-      run: |
-        # Create tar.gz of the repository
-        tar -czf "release-${{ steps.version.outputs.version }}.tar.gz" \
-          --exclude='.git' \
-          --exclude='.github' \
-          --exclude='*.tar.gz' \
-          . || true
-
     - name: Generate release notes
       id: release_notes
       run: |
@@ -92,22 +83,21 @@ jobs:
         tag_name: ${{ steps.version.outputs.tag }}
         name: Release ${{ steps.version.outputs.tag }}
         body: ${{ steps.release_notes.outputs.notes }}
-        files: |
-          release-${{ steps.version.outputs.version }}.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Update Homebrew Formula
       run: |
-        # Calculate SHA256 of the release tarball
-        SHA256=$(sha256sum "release-${{ steps.version.outputs.version }}.tar.gz" | cut -d' ' -f1)
+        # Calculate SHA256 of the GitHub release tarball
+        RELEASE_URL="https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz"
+        SHA256=$(curl -sL "$RELEASE_URL" | sha256sum | cut -d' ' -f1)
 
         # Update the formula file
-        sed -i "s|url \".*\"|url \"https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz\"|" Formula/bump.rb
+        sed -i "s|url \".*\"|url \"$RELEASE_URL\"|" Formula/bump.rb
         sed -i "s|sha256 \".*\"|sha256 \"$SHA256\"|" Formula/bump.rb
 
         echo "Updated Formula/bump.rb:"
-        echo "- URL: https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz"
+        echo "- URL: $RELEASE_URL"
         echo "- SHA256: $SHA256"
 
     - name: Create Pull Request for formula update
@@ -124,5 +114,5 @@ jobs:
           - Updated SHA256 hash
 
           This PR was automatically created by the release workflow.
-        branch: update-formula-${{ steps.version.outputs.tag }}
+        branch: feature/update_formula_${{ steps.version.outputs.tag }}
         delete-branch: true
