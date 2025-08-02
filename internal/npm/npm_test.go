@@ -139,6 +139,207 @@ func TestUpdatePackageJson(t *testing.T) {
 	}
 }
 
+func TestUpdatePreservesAllContent(t *testing.T) {
+	// Realistic package.json content with scripts, metadata, config, and dependencies
+	originalContent := `{
+  "name": "my-react-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A comprehensive React application",
+  "author": "John Doe <john@example.com>",
+  "license": "MIT",
+  "keywords": ["react", "frontend", "web"],
+  "homepage": "https://example.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/my-react-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/user/my-react-app/issues"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "axios": "^1.4.0",
+    "lodash": "~4.17.20",
+    "moment": ">=2.29.0"
+  },
+  "devDependencies": {
+    "react-scripts": "5.0.1",
+    "typescript": ">=4.9.0",
+    "eslint": "^8.45.0",
+    "prettier": "^2.8.0",
+    "@types/react": "^18.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx,ts,tsx}",
+      "!src/index.js"
+    ]
+  },
+  "proxy": "http://localhost:3001",
+  "custom": {
+    "feature_flags": {
+      "new_ui": true,
+      "analytics": false
+    },
+    "build_config": {
+      "optimization": "advanced",
+      "source_maps": true
+    }
+  }
+}`
+
+	// Create a temporary test file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "package.json")
+
+	// Write the original content
+	err := os.WriteFile(testFile, []byte(originalContent), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mock dependencies for update
+	deps := []shared.OutdatedDependency{
+		{Name: "react", CurrentVersion: "18.0.0", LatestVersion: "18.2.0", OriginalVersion: "^18.0.0"},
+		{Name: "axios", CurrentVersion: "1.4.0", LatestVersion: "1.5.0", OriginalVersion: "^1.4.0"},
+		{Name: "eslint", CurrentVersion: "8.45.0", LatestVersion: "8.47.0", OriginalVersion: "^8.45.0"},
+	}
+
+	// Update the dependencies
+	updater := NewUpdater()
+	err = updater.UpdateDependencies(testFile, deps, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the updated content
+	updatedContent, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updatedStr := string(updatedContent)
+
+	// Verify that critical non-dependency content is preserved
+	criticalContent := []string{
+		`"name": "my-react-app"`,
+		`"version": "0.1.0"`,
+		`"private": true`,
+		`"description": "A comprehensive React application"`,
+		`"author": "John Doe <john@example.com>"`,
+		`"license": "MIT"`,
+		`"keywords": ["react", "frontend", "web"]`,
+		`"homepage": "https://example.com"`,
+		`"repository":`,
+		`"type": "git"`,
+		`"url": "https://github.com/user/my-react-app.git"`,
+		`"bugs":`,
+		`"engines":`,
+		`"node": ">=16.0.0"`,
+		`"npm": ">=8.0.0"`,
+		`"scripts":`,
+		`"start": "react-scripts start"`,
+		`"build": "react-scripts build"`,
+		`"test": "react-scripts test"`,
+		`"eject": "react-scripts eject"`,
+		`"lint": "eslint src/"`,
+		`"format": "prettier --write src/"`,
+		`"peerDependencies":`,
+		`"browserslist":`,
+		`"production":`,
+		`">0.2%"`,
+		`"not dead"`,
+		`"not op_mini all"`,
+		`"development":`,
+		`"last 1 chrome version"`,
+		`"eslintConfig":`,
+		`"extends":`,
+		`"react-app"`,
+		`"react-app/jest"`,
+		`"jest":`,
+		`"collectCoverageFrom":`,
+		`"src/**/*.{js,jsx,ts,tsx}"`,
+		`"!src/index.js"`,
+		`"proxy": "http://localhost:3001"`,
+		`"custom":`,
+		`"feature_flags":`,
+		`"new_ui": true`,
+		`"analytics": false`,
+		`"build_config":`,
+		`"optimization": "advanced"`,
+		`"source_maps": true`,
+	}
+
+	for _, content := range criticalContent {
+		if !strings.Contains(updatedStr, content) {
+			t.Errorf("Critical content missing after update: %s", content)
+		}
+	}
+
+	// Verify that dependencies were actually updated
+	expectedUpdates := map[string]string{
+		`"react": "^18.2.0"`:  "react version should be updated to 18.2.0",
+		`"axios": "^1.5.0"`:   "axios version should be updated to 1.5.0",
+		`"eslint": "^8.47.0"`: "eslint version should be updated to 8.47.0",
+	}
+
+	for expectedText, errorMsg := range expectedUpdates {
+		if !strings.Contains(updatedStr, expectedText) {
+			t.Errorf("%s, but found:\n%s", errorMsg, updatedStr)
+		}
+	}
+
+	// Verify that unchanged dependencies remain unchanged
+	unchangedDeps := []string{
+		`"react-dom": "^18.0.0"`,
+		`"lodash": "~4.17.20"`,
+		`"moment": ">=2.29.0"`,
+		`"typescript": ">=4.9.0"`,
+		`"prettier": "^2.8.0"`,
+	}
+
+	for _, dep := range unchangedDeps {
+		if !strings.Contains(updatedStr, dep) {
+			t.Errorf("Unchanged dependency missing: %s", dep)
+		}
+	}
+}
+
 func TestGetFileType(t *testing.T) {
 	parser := NewParser()
 	if parser.GetFileType() != "npm" {

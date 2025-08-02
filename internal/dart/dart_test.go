@@ -272,3 +272,155 @@ dependencies:
 		}
 	}
 }
+
+func TestUpdatePreservesAllContent(t *testing.T) {
+	// Realistic pubspec.yaml content with comments, metadata, assets, and dependencies
+	originalContent := `name: my_flutter_app
+description: A new Flutter application.
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+  flutter: ">=3.13.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP client
+  http: ^0.13.0
+
+  # State management
+  provider: ^6.0.0
+
+  # Utilities
+  collection: ^1.17.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Code generation
+  build_runner: ^2.4.0
+
+  # Linting
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Assets
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  # Fonts
+  fonts:
+    - family: CustomFont
+      fonts:
+        - asset: fonts/CustomFont-Regular.ttf
+        - asset: fonts/CustomFont-Bold.ttf
+          weight: 700
+
+# Custom configuration
+custom_config:
+  feature_flags:
+    new_ui: true
+    analytics: false`
+
+	// Create a temporary test file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "pubspec.yaml")
+
+	// Write the original content
+	err := os.WriteFile(testFile, []byte(originalContent), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mock dependencies for update
+	deps := []shared.OutdatedDependency{
+		{Name: "http", CurrentVersion: "0.13.0", LatestVersion: "0.13.5"},
+		{Name: "provider", CurrentVersion: "6.0.0", LatestVersion: "6.1.2"},
+		{Name: "build_runner", CurrentVersion: "2.4.0", LatestVersion: "2.4.7"},
+	}
+
+	// Update the dependencies
+	updater := NewUpdater()
+	err = updater.UpdateDependencies(testFile, deps, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the updated content
+	updatedContent, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updatedStr := string(updatedContent)
+
+	// Verify that critical non-dependency content is preserved
+	criticalContent := []string{
+		"name: my_flutter_app",
+		"description: A new Flutter application.",
+		"version: 1.0.0+1",
+		"environment:",
+		"sdk: '>=3.1.0 <4.0.0'",
+		"flutter: \">=3.13.0\"",
+		"# HTTP client",
+		"# State management",
+		"# Utilities",
+		"# Code generation",
+		"# Linting",
+		"flutter:",
+		"uses-material-design: true",
+		"# Assets",
+		"assets:",
+		"- assets/images/",
+		"- assets/icons/",
+		"# Fonts",
+		"fonts:",
+		"- family: CustomFont",
+		"fonts:",
+		"- asset: fonts/CustomFont-Regular.ttf",
+		"- asset: fonts/CustomFont-Bold.ttf",
+		"weight: 700",
+		"# Custom configuration",
+		"custom_config:",
+		"feature_flags:",
+		"new_ui: true",
+		"analytics: false",
+	}
+
+	for _, content := range criticalContent {
+		if !strings.Contains(updatedStr, content) {
+			t.Errorf("Critical content missing after update: %s", content)
+		}
+	}
+
+	// Verify that dependencies were actually updated
+	expectedUpdates := map[string]string{
+		"http: ^0.13.5":        "http version should be updated to 0.13.5",
+		"provider: ^6.1.2":     "provider version should be updated to 6.1.2",
+		"build_runner: ^2.4.7": "build_runner version should be updated to 2.4.7",
+	}
+
+	for expectedText, errorMsg := range expectedUpdates {
+		if !strings.Contains(updatedStr, expectedText) {
+			t.Errorf("%s, but found:\n%s", errorMsg, updatedStr)
+		}
+	}
+
+	// Verify that unchanged dependencies remain unchanged
+	unchangedDeps := []string{
+		"collection: ^1.17.0",
+		"flutter_lints: ^2.0.0",
+	}
+
+	for _, dep := range unchangedDeps {
+		if !strings.Contains(updatedStr, dep) {
+			t.Errorf("Unchanged dependency missing: %s", dep)
+		}
+	}
+}
