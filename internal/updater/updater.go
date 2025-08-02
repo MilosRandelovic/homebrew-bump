@@ -1,11 +1,14 @@
 package updater
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,6 +61,130 @@ type PubDevPackageInfo struct {
 	Latest struct {
 		Version string `json:"version"`
 	} `json:"latest"`
+}
+
+// NpmrcConfig holds the parsed .npmrc configuration
+type NpmrcConfig struct {
+	ScopeRegistries map[string]string // maps scope to registry URL
+	AuthTokens      map[string]string // maps registry to auth token
+}
+
+// parseNpmrcFiles parses both local and global .npmrc files and merges their configurations
+// Local .npmrc takes precedence for scope registries, global .npmrc provides auth tokens
+func parseNpmrcFiles(localPath string) (*NpmrcConfig, error) {
+	config := &NpmrcConfig{
+		ScopeRegistries: make(map[string]string),
+		AuthTokens:      make(map[string]string),
+	}
+
+	// Parse global .npmrc first (from home directory)
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		globalNpmrcPath := filepath.Join(homeDir, ".npmrc")
+		globalConfig, err := parseNpmrcFile(globalNpmrcPath)
+		if err == nil {
+			// Copy global config
+			maps.Copy(config.ScopeRegistries, globalConfig.ScopeRegistries)
+			maps.Copy(config.AuthTokens, globalConfig.AuthTokens)
+		}
+	}
+
+	// Parse local .npmrc (overrides global for scope registries)
+	localConfig, err := parseNpmrcFile(localPath)
+	if err != nil {
+		// If local file doesn't exist, that's okay, we still have global config
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+	} else {
+		// Local scope registries override global ones
+		maps.Copy(config.ScopeRegistries, localConfig.ScopeRegistries)
+		// Local auth tokens override global ones
+		maps.Copy(config.AuthTokens, localConfig.AuthTokens)
+	}
+
+	return config, nil
+}
+
+func parseNpmrcFile(filePath string) (*NpmrcConfig, error) {
+	config := &NpmrcConfig{
+		ScopeRegistries: make(map[string]string),
+		AuthTokens:      make(map[string]string),
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Return empty config if file doesn't exist
+			return config, nil
+		}
+		return nil, fmt.Errorf("failed to open .npmrc file: %w", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+
+		// Parse scope registry: @scope:registry=https://registry.example.com
+		if strings.Contains(line, ":registry=") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				registry := strings.TrimSpace(parts[1])
+
+				// Extract scope from @scope:registry
+				if strings.HasSuffix(key, ":registry") {
+					scope := strings.TrimSuffix(key, ":registry")
+					config.ScopeRegistries[scope] = registry
+				}
+			}
+		}
+
+		// Parse auth tokens: //registry.example.com/:_authToken=token
+		if strings.Contains(line, ":_authToken=") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				token := strings.Trim(strings.TrimSpace(parts[1]), "\"'")
+
+				// Extract registry from //registry.example.com/:_authToken
+				if strings.HasSuffix(key, ":_authToken") {
+					registry := strings.TrimSuffix(key, ":_authToken")
+					registry = strings.TrimPrefix(registry, "//")
+					registry = strings.TrimSuffix(registry, "/")
+					config.AuthTokens[registry] = token
+				}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading .npmrc file: %w", err)
+	}
+
+	return config, nil
+}
+
+// getRegistryForPackage determines the appropriate registry URL for a package
+func getRegistryForPackage(packageName string, npmrcConfig *NpmrcConfig) string {
+	// Check if it's a scoped package
+	if strings.HasPrefix(packageName, "@") {
+		if idx := strings.Index(packageName[1:], "/"); idx != -1 {
+			scope := packageName[:idx+1] // Include @ but not the /
+			if registry, exists := npmrcConfig.ScopeRegistries[scope]; exists {
+				return registry
+			}
+		}
+	}
+
+	// Default to public npm registry
+	return "https://registry.npmjs.org"
 }
 
 // CheckOutdated checks which dependencies have newer versions available
@@ -166,21 +293,48 @@ func getLatestVersion(packageName, fileType string, verbose bool) (string, error
 
 // getNpmLatestVersion fetches the latest version from NPM registry
 func getNpmLatestVersion(packageName string, verbose bool) (string, error) {
-	url := fmt.Sprintf("https://registry.npmjs.org/%s", packageName)
+	// Parse .npmrc configuration from both local and global files
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	npmrcPath := filepath.Join(cwd, ".npmrc")
+	npmrcConfig, err := parseNpmrcFiles(npmrcPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse .npmrc: %w", err)
+	}
+
+	// Get the appropriate registry for this package
+	registryURL := getRegistryForPackage(packageName, npmrcConfig)
+	url := fmt.Sprintf("%s/%s", registryURL, packageName)
 
 	if verbose {
-		fmt.Printf("Checking NPM package: %s\n", packageName)
+		fmt.Printf("Checking NPM package: %s (registry: %s)\n", packageName, registryURL)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add authentication if available for this registry
+	if authToken := getAuthTokenForRegistry(registryURL, npmrcConfig); authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
+		if verbose {
+			fmt.Printf("Using authentication for registry: %s\n", registryURL)
+		}
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch package info: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("NPM registry returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("registry returned status %d for %s", resp.StatusCode, packageName)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -198,6 +352,21 @@ func getNpmLatestVersion(packageName string, verbose bool) (string, error) {
 	}
 
 	return "", fmt.Errorf("no latest version found for %s", packageName)
+}
+
+// getAuthTokenForRegistry finds the appropriate auth token for a registry URL
+func getAuthTokenForRegistry(registryURL string, npmrcConfig *NpmrcConfig) string {
+	// Extract hostname from registry URL for matching
+	if after, ok := strings.CutPrefix(registryURL, "https://"); ok {
+		hostname := after
+		hostname = strings.TrimSuffix(hostname, "/")
+
+		if token, exists := npmrcConfig.AuthTokens[hostname]; exists {
+			return token
+		}
+	}
+
+	return ""
 }
 
 // getPubDevLatestVersion fetches the latest version from pub.dev API
