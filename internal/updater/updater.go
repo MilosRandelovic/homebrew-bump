@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,12 +52,15 @@ type PubDevPackageInfo struct {
 
 // CheckOutdated checks which dependencies have newer versions available
 func CheckOutdated(dependencies []parser.Dependency, fileType string, verbose bool) ([]OutdatedDependency, error) {
-	result, err := CheckOutdatedWithProgress(dependencies, fileType, verbose, nil)
-	return result.Outdated, err
+	result, err := CheckOutdatedWithProgress(dependencies, fileType, verbose, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	return result.Outdated, nil
 }
 
 // CheckOutdatedWithProgress checks which dependencies have newer versions available with progress callback
-func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string, verbose bool, progressCallback func(int, int)) (*CheckResult, error) {
+func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string, verbose bool, semver bool, progressCallback func(int, int)) (*CheckResult, error) {
 	var outdated []OutdatedDependency
 	var errors []DependencyError
 	total := len(dependencies)
@@ -75,6 +79,14 @@ func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string
 			continue
 		}
 
+		// If semver flag is enabled and it's a hardcoded version (no prefix), skip it
+		if semver && getVersionPrefix(dep.OriginalVersion) == "" {
+			if verbose {
+				fmt.Printf("Skipping hardcoded version: %s (%s)\n", dep.Name, dep.OriginalVersion)
+			}
+			continue
+		}
+
 		latestVersion, err := getLatestVersion(dep.Name, fileType, verbose)
 		if err != nil {
 			errors = append(errors, DependencyError{
@@ -89,6 +101,15 @@ func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string
 
 		currentVersion := dep.Version // Already cleaned in parser
 		if currentVersion != latestVersion && latestVersion != "" {
+			// If semver flag is enabled, check if the latest version is compatible
+			if semver && !isSemverCompatible(dep.OriginalVersion, latestVersion) {
+				if verbose {
+					fmt.Printf("Skipping %s: latest version %s not compatible with constraint %s\n",
+						dep.Name, latestVersion, dep.OriginalVersion)
+				}
+				continue
+			}
+
 			outdated = append(outdated, OutdatedDependency{
 				Name:            dep.Name,
 				CurrentVersion:  currentVersion,
@@ -185,19 +206,19 @@ func getPubDevLatestVersion(packageName string, verbose bool) (string, error) {
 }
 
 // UpdateDependencies updates the dependencies in the file
-func UpdateDependencies(filePath string, outdated []OutdatedDependency, fileType string, verbose bool) error {
+func UpdateDependencies(filePath string, outdated []OutdatedDependency, fileType string, verbose bool, semver bool) error {
 	switch fileType {
 	case "npm":
-		return updatePackageJson(filePath, outdated, verbose)
+		return updatePackageJson(filePath, outdated, verbose, semver)
 	case "dart":
-		return updatePubspecYaml(filePath, outdated, verbose)
+		return updatePubspecYaml(filePath, outdated, verbose, semver)
 	default:
 		return fmt.Errorf("unsupported file type: %s", fileType)
 	}
 }
 
 // updatePackageJson updates dependencies in a package.json file
-func updatePackageJson(filePath string, outdated []OutdatedDependency, verbose bool) error {
+func updatePackageJson(filePath string, outdated []OutdatedDependency, verbose bool, semver bool) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
@@ -241,7 +262,7 @@ func updatePackageJson(filePath string, outdated []OutdatedDependency, verbose b
 }
 
 // updatePubspecYaml updates dependencies in a pubspec.yaml file
-func updatePubspecYaml(filePath string, outdated []OutdatedDependency, verbose bool) error {
+func updatePubspecYaml(filePath string, outdated []OutdatedDependency, verbose bool, semver bool) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
@@ -299,4 +320,101 @@ func getVersionPrefix(version string) string {
 		return matches[1]
 	}
 	return ""
+}
+
+// isSemverCompatible checks if the latest version is compatible with the original version constraint
+func isSemverCompatible(originalVersion, latestVersion string) bool {
+	prefix := getVersionPrefix(originalVersion)
+
+	// If no prefix, it's a hardcoded version - not compatible with semver
+	if prefix == "" {
+		return false
+	}
+
+	// If the latest version contains pre-release identifiers, be conservative and skip it
+	if strings.Contains(latestVersion, "-") {
+		return false
+	}
+
+	// Parse current and latest versions
+	currentVer, err := parseSemanticVersion(parser.CleanVersion(originalVersion))
+	if err != nil {
+		return false
+	}
+
+	latestVer, err := parseSemanticVersion(latestVersion)
+	if err != nil {
+		return false
+	}
+
+	switch prefix {
+	case "^":
+		// Caret allows changes that do not modify the left-most non-zero digit
+		if currentVer.Major == 0 {
+			if currentVer.Minor == 0 {
+				// ^0.0.x - only patch-level changes
+				return latestVer.Major == 0 && latestVer.Minor == 0 && latestVer.Patch >= currentVer.Patch
+			}
+			// ^0.x.y - minor and patch-level changes
+			return latestVer.Major == 0 && latestVer.Minor >= currentVer.Minor
+		}
+		// ^x.y.z - minor and patch-level changes
+		return latestVer.Major == currentVer.Major &&
+			(latestVer.Minor > currentVer.Minor ||
+				(latestVer.Minor == currentVer.Minor && latestVer.Patch >= currentVer.Patch))
+
+	case "~":
+		// Tilde allows patch-level changes if a minor version is specified
+		// ~1.2.3 := >=1.2.3 <1.3.0 (reasonably close to 1.2.3)
+		return latestVer.Major == currentVer.Major &&
+			latestVer.Minor == currentVer.Minor &&
+			latestVer.Patch >= currentVer.Patch
+
+	default:
+		// For other prefixes like >=, >, <, <=, we'll be conservative and not update
+		return false
+	}
+}
+
+// SemanticVersion represents a parsed semantic version
+type SemanticVersion struct {
+	Major int
+	Minor int
+	Patch int
+}
+
+// parseSemanticVersion parses a semantic version string into components
+func parseSemanticVersion(version string) (*SemanticVersion, error) {
+	// Handle pre-release and build metadata by splitting on '-' and '+'
+	parts := strings.Split(version, "-")
+	version = parts[0] // Take only the main version part
+
+	parts = strings.Split(version, "+")
+	version = parts[0] // Remove build metadata
+
+	parts = strings.Split(version, ".")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid semantic version: %s", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid major version: %s", parts[0])
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid minor version: %s", parts[1])
+	}
+
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return nil, fmt.Errorf("invalid patch version: %s", parts[2])
+	}
+
+	return &SemanticVersion{
+		Major: major,
+		Minor: minor,
+		Patch: patch,
+	}, nil
 }

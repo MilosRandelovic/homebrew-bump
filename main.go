@@ -45,6 +45,8 @@ func main() {
 		versionShort = flag.Bool("V", false, "Show version information (shorthand)")
 		help         = flag.Bool("help", false, "Show help information")
 		helpShort    = flag.Bool("h", false, "Show help information (shorthand)")
+		semver       = flag.Bool("semver", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
+		semverShort  = flag.Bool("s", false, "Respect semver constraints (^, ~) and skip hardcoded versions (shorthand)")
 	)
 	flag.Parse()
 
@@ -60,6 +62,9 @@ func main() {
 	}
 	if *helpShort {
 		*help = true
+	}
+	if *semverShort {
+		*semver = true
 	}
 
 	if *showVersion {
@@ -77,6 +82,7 @@ func main() {
 		fmt.Println("  pubspec.yaml  - Dart/Flutter dependencies")
 		fmt.Println("\nOptions:")
 		fmt.Println("  -update, -u     Update dependencies to latest versions")
+		fmt.Println("  -semver, -s     Respect semver constraints (^, ~) and skip hardcoded versions")
 		fmt.Println("  -verbose, -v    Enable verbose output")
 		fmt.Println("  -version, -V    Show version information")
 		fmt.Println("  -help, -h       Show this help")
@@ -84,6 +90,8 @@ func main() {
 		fmt.Println("  bump            # Check for outdated dependencies")
 		fmt.Println("  bump -update    # Update dependencies to latest versions")
 		fmt.Println("  bump -u -v      # Update with verbose output")
+		fmt.Println("  bump -s         # Check with semver constraints (^, ~)")
+		fmt.Println("  bump -u -s      # Update with semver constraints")
 		os.Exit(0)
 	}
 
@@ -120,7 +128,7 @@ func main() {
 		}
 	}
 
-	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, progressCallback)
+	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, *semver, progressCallback)
 	if err != nil {
 		log.Fatalf("Error checking for updates: %v", err)
 	}
@@ -176,7 +184,7 @@ func main() {
 	// Update if requested
 	if *update {
 		if len(outdated) > 0 {
-			err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose)
+			err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose, *semver)
 			if err != nil {
 				log.Fatalf("\nError updating dependencies: %v", err)
 			}
