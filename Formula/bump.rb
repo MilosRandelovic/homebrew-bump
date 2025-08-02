@@ -5,7 +5,7 @@ class Bump < Formula
   desc "A utility to check and update package dependencies"
   homepage "https://github.com/MilosRandelovic/homebrew-bump"
   url "https://github.com/MilosRandelovic/homebrew-bump/archive/v1.0.0.tar.gz"
-  sha256 "067a05475f97cbd55bd961f502e3ede85b2666bb2aa16e1e71d82a61ed2de0cf"
+  sha256 "c68fa309ee88982f8a6b64573e762860cbff3f396a7f0c50b1ebb43c20876840"
   license "MIT"
 
   depends_on "go" => :build
