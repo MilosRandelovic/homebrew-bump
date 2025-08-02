@@ -20,6 +20,13 @@ dependencies:
     sdk: flutter
   http: ^0.13.5
   path: ^1.8.0
+  intl: any
+  private_package:
+    hosted: https://private.registry.com/pub
+    version: ^0.0.1
+  pubdev_hosted:
+    hosted: https://pub.dev
+    version: ^1.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -37,9 +44,13 @@ dev_dependencies:
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
 
-	// Should exclude flutter SDK dependency but include others
-	if len(dependencies) != 3 {
-		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
+	// Should exclude flutter SDK dependency, private hosted packages, and 'any' versions
+	// Should include: http, path, pubdev_hosted, test = 4 dependencies
+	if len(dependencies) != 4 {
+		t.Errorf("Expected 4 dependencies, got %d", len(dependencies))
+		for _, dep := range dependencies {
+			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+		}
 	}
 
 	// Check specific dependencies
@@ -70,6 +81,21 @@ dev_dependencies:
 
 	if originalVersionMap["test"] != ">=1.21.0 <2.0.0" {
 		t.Errorf("Expected test original version '>=1.21.0 <2.0.0', got '%s'", originalVersionMap["test"])
+	}
+
+	// Check that pub.dev hosted packages are included
+	if originalVersionMap["pubdev_hosted"] != "^1.0.0" {
+		t.Errorf("Expected pubdev_hosted original version '^1.0.0', got '%s'", originalVersionMap["pubdev_hosted"])
+	}
+
+	// Check that 'any' versions are excluded
+	if _, exists := originalVersionMap["intl"]; exists {
+		t.Errorf("Expected intl ('any' version) to be excluded, but it was found with version '%s'", originalVersionMap["intl"])
+	}
+
+	// Check that private hosted packages are excluded
+	if _, exists := originalVersionMap["private_package"]; exists {
+		t.Errorf("Expected private_package to be excluded, but it was found with version '%s'", originalVersionMap["private_package"])
 	}
 }
 
@@ -154,5 +180,95 @@ func TestGetFileType(t *testing.T) {
 	registry := NewRegistryClient()
 	if registry.GetFileType() != "dart" {
 		t.Errorf("Expected file type 'dart', got '%s'", registry.GetFileType())
+	}
+}
+
+func TestParsePubspecYamlEdgeCases(t *testing.T) {
+	// Test various edge cases for pubspec parsing
+	tempDir := t.TempDir()
+	pubspecPath := filepath.Join(tempDir, "pubspec.yaml")
+
+	pubspecContent := `name: test_package
+dependencies:
+  # Regular dependencies
+  http: ^0.13.5
+  intl: any
+
+  # SDK dependencies (should be skipped)
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Private hosted packages (should be skipped)
+  private_pkg:
+    hosted: "https://private-registry.example.com"
+    version: "1.0.0"
+
+  # Public hosted packages (should be included)
+  pubdev_hosted:
+    hosted: https://pub.dev
+    version: ^1.0.0
+
+  # Git dependencies (should be skipped)
+  git_pkg:
+    git:
+      url: https://github.com/example/repo.git
+      ref: main
+
+  # Path dependencies (should be skipped)
+  local_pkg:
+    path: ../local_package
+`
+
+	err := os.WriteFile(pubspecPath, []byte(pubspecContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(pubspecPath)
+	if err != nil {
+		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
+	}
+
+	// Should only include: http, pubdev_hosted = 2 dependencies ('any' versions are filtered out)
+	expectedDeps := []string{"http", "pubdev_hosted"}
+	if len(dependencies) != len(expectedDeps) {
+		t.Errorf("Expected %d dependencies, got %d", len(expectedDeps), len(dependencies))
+		for _, dep := range dependencies {
+			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+		}
+	}
+
+	// Create map for easier testing
+	depMap := make(map[string]shared.Dependency)
+	for _, dep := range dependencies {
+		depMap[dep.Name] = dep
+	}
+
+	// Verify each expected dependency
+	for _, expectedName := range expectedDeps {
+		if _, exists := depMap[expectedName]; !exists {
+			t.Errorf("Expected dependency '%s' not found", expectedName)
+		}
+	}
+
+	// Check specific version handling for pubdev_hosted
+	if dep, exists := depMap["pubdev_hosted"]; exists {
+		if dep.OriginalVersion != "^1.0.0" {
+			t.Errorf("Expected pubdev_hosted original version '^1.0.0', got '%s'", dep.OriginalVersion)
+		}
+		if dep.Version != "1.0.0" {
+			t.Errorf("Expected pubdev_hosted cleaned version '1.0.0', got '%s'", dep.Version)
+		}
+	}
+
+	// Verify excluded dependencies (including 'any' versions)
+	excludedDeps := []string{"flutter", "flutter_localizations", "private_pkg1", "private_pkg2", "git_pkg", "local_pkg", "intl"}
+	for _, excludedName := range excludedDeps {
+		if _, exists := depMap[excludedName]; exists {
+			t.Errorf("Dependency '%s' should have been excluded but was found", excludedName)
+		}
 	}
 }

@@ -45,8 +45,13 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 		}
 
 		version := parseVersionFromInterface(versionInterface)
-		// Skip SDK dependencies and empty versions
-		if version == "" || strings.HasPrefix(version, "sdk:") {
+		// Skip SDK dependencies, empty versions, 'any' versions, path, git, and hosted packages from private registries
+		if version == "" || version == "any" || strings.HasPrefix(version, "sdk:") || strings.HasPrefix(version, "path:") || strings.HasPrefix(version, "git:") {
+			continue
+		}
+
+		// Skip hosted packages from private registries (not pub.dev)
+		if strings.HasPrefix(version, "hosted:") {
 			continue
 		}
 
@@ -60,8 +65,13 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 	// Parse dev dependencies
 	for name, versionInterface := range pubspec.DevDependencies {
 		version := parseVersionFromInterface(versionInterface)
-		// Skip SDK dependencies and empty versions
-		if version == "" || strings.HasPrefix(version, "sdk:") {
+		// Skip SDK dependencies, empty versions, 'any' versions, path, git, and hosted packages from private registries
+		if version == "" || version == "any" || strings.HasPrefix(version, "sdk:") || strings.HasPrefix(version, "path:") || strings.HasPrefix(version, "git:") {
+			continue
+		}
+
+		// Skip hosted packages from private registries (not pub.dev)
+		if strings.HasPrefix(version, "hosted:") {
 			continue
 		}
 
@@ -86,15 +96,28 @@ func parseVersionFromInterface(versionInterface interface{}) string {
 		if sdk, ok := v["sdk"]; ok {
 			return fmt.Sprintf("sdk:%v", sdk)
 		}
+		// Handle hosted packages
+		if hosted, ok := v["hosted"]; ok {
+			// For hosted packages, we need to check if they're from pub.dev or private registries
+			hostedURL := fmt.Sprintf("%v", hosted)
+
+			// If it's a private registry (not pub.dev), skip it
+			if hostedURL != "" && !strings.Contains(hostedURL, "pub.dev") {
+				return fmt.Sprintf("hosted:%v", hosted)
+			}
+
+			// For pub.dev hosted packages, extract the version
+			if version, hasVersion := v["version"]; hasVersion {
+				return fmt.Sprintf("%v", version)
+			}
+			return fmt.Sprintf("hosted:%v", hosted)
+		}
 		// Handle git dependencies or other complex version specifications
 		if path, ok := v["path"]; ok {
 			return fmt.Sprintf("path:%v", path)
 		}
 		if git, ok := v["git"]; ok {
 			return fmt.Sprintf("git:%v", git)
-		}
-		if hosted, ok := v["hosted"]; ok {
-			return fmt.Sprintf("hosted:%v", hosted)
 		}
 		return "complex"
 	default:

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -49,6 +48,12 @@ func main() {
 		semverShort  = flag.Bool("s", false, "Respect semver constraints (^, ~) and skip hardcoded versions (shorthand)")
 	)
 	flag.Parse()
+
+	// Check for any remaining arguments that weren't parsed as flags
+	if flag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "Error: Unknown arguments: %v\nRun 'bump -help' for usage information.\n", flag.Args())
+		os.Exit(1)
+	}
 
 	// Handle shorthand flags
 	if *updateShort {
@@ -98,7 +103,8 @@ func main() {
 	// Auto-detect dependency file in current directory
 	filePath, fileType, err := autoDetectDependencyFile()
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Extract filename from path for display
@@ -111,7 +117,8 @@ func main() {
 	// Parse the file
 	dependencies, err := parser.ParseDependencies(filePath, fileType)
 	if err != nil {
-		log.Fatalf("Error parsing file: %v", err)
+		fmt.Fprintf(os.Stderr, "Error parsing file: %v\n", err)
+		os.Exit(1)
 	}
 
 	if *verbose {
@@ -130,7 +137,8 @@ func main() {
 
 	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, *semver, progressCallback)
 	if err != nil {
-		log.Fatalf("Error checking for updates: %v", err)
+		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
+		os.Exit(1)
 	}
 
 	outdated := result.Outdated
@@ -203,7 +211,8 @@ func main() {
 		if len(outdated) > 0 {
 			err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose, *semver)
 			if err != nil {
-				log.Fatalf("\nError updating dependencies: %v", err)
+				fmt.Fprintf(os.Stderr, "\nError updating dependencies: %v\n", err)
+				os.Exit(1)
 			}
 			fmt.Println("\nDependencies updated successfully!")
 		} else {
