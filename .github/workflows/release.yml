@@ -9,8 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     # Prevent circular triggers when the bot commits formula updates
     if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -112,3 +118,5 @@ jobs:
           git commit -m "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
           git push origin main
         fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
