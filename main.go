@@ -6,12 +6,35 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/parser"
 	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
 )
 
 const version = "1.0.0"
+
+// Color constants
+const (
+	ColorReset  = "\033[0m"
+	ColorRed    = "\033[31m" // Major version changes
+	ColorYellow = "\033[33m" // Minor version changes
+	ColorGreen  = "\033[32m" // Patch version changes
+	ColorCyan   = "\033[36m" // Package names
+	ColorBlue   = "\033[34m" // Arrows
+)
+
+// SemverChange represents the type of version change
+type SemverChange int
+
+const (
+	PatchChange SemverChange = iota
+	MinorChange
+	MajorChange
+)
 
 func main() {
 	var (
@@ -71,6 +94,9 @@ func main() {
 		log.Fatalf("Error: %v", err)
 	}
 
+	// Extract filename from path for display
+	fileName := filepath.Base(filePath)
+
 	if *verbose {
 		fmt.Printf("Found %s file: %s\n", fileType, filePath)
 	}
@@ -86,7 +112,13 @@ func main() {
 	}
 
 	// Always check for outdated dependencies
-	outdated, err := updater.CheckOutdated(dependencies, fileType, *verbose)
+	fmt.Printf("Checking %d dependencies from %s...\n", len(dependencies), fileName)
+
+	progressCallback := func(current, total int) {
+		printProgressBar(current, total)
+	}
+
+	outdated, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, progressCallback)
 	if err != nil {
 		log.Fatalf("Error checking for updates: %v", err)
 	}
@@ -96,9 +128,27 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Found %d outdated dependencies:\n", len(outdated))
+	fmt.Printf("\n") // Add space after progress bar
+
+	// Sort outdated dependencies alphabetically by name
+	sort.Slice(outdated, func(i, j int) bool {
+		return outdated[i].Name < outdated[j].Name
+	})
+
+	// Display results with colors and proper formatting
 	for _, dep := range outdated {
-		fmt.Printf("  %s: %s -> %s\n", dep.Name, dep.CurrentVersion, dep.LatestVersion)
+		change := getSemverChange(dep.CurrentVersion, dep.LatestVersion)
+		color := getChangeColor(change)
+
+		// Get the original version prefixes
+		currentWithPrefix := getOriginalVersionString(dep.Name, filePath, fileType)
+		latestWithPrefix := strings.Replace(currentWithPrefix, dep.CurrentVersion, dep.LatestVersion, 1)
+
+		// Format output similar to ncu - only color the latest version
+		fmt.Printf(" %s%-30s%s  %15s  →  %s%15s%s\n",
+			ColorCyan, dep.Name, ColorReset,
+			currentWithPrefix,
+			color, latestWithPrefix, ColorReset)
 	}
 
 	// Update if requested
@@ -133,4 +183,116 @@ func autoDetectDependencyFile() (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("no package.json or pubspec.yaml found in current directory")
+}
+
+// parseVersion extracts major, minor, patch from a version string
+func parseVersion(version string) (int, int, int, error) {
+	// Remove prefix characters like ^, ~, >=, etc.
+	re := regexp.MustCompile(`^[\^~>=<]+`)
+	cleanVer := re.ReplaceAllString(version, "")
+
+	// Split by dots
+	parts := strings.Split(cleanVer, ".")
+	if len(parts) < 3 {
+		return 0, 0, 0, fmt.Errorf("invalid version format: %s", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	return major, minor, patch, nil
+}
+
+// getSemverChange determines the type of version change
+func getSemverChange(currentVer, latestVer string) SemverChange {
+	currMajor, currMinor, currPatch, err1 := parseVersion(currentVer)
+	latestMajor, latestMinor, latestPatch, err2 := parseVersion(latestVer)
+
+	if err1 != nil || err2 != nil {
+		return PatchChange // Default to patch if we can't parse
+	}
+
+	if latestMajor > currMajor {
+		return MajorChange
+	}
+	if latestMinor > currMinor {
+		return MinorChange
+	}
+	if latestPatch > currPatch {
+		return PatchChange
+	}
+
+	return PatchChange
+}
+
+// getChangeColor returns the appropriate color for the version change type
+func getChangeColor(change SemverChange) string {
+	switch change {
+	case MajorChange:
+		return ColorRed
+	case MinorChange:
+		return ColorYellow
+	case PatchChange:
+		return ColorGreen
+	default:
+		return ColorReset
+	}
+}
+
+// getOriginalVersionString retrieves the original version string with prefixes from the file
+func getOriginalVersionString(packageName, filePath, fileType string) string {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return ""
+	}
+
+	content := string(data)
+
+	// Escape special regex characters in package name
+	escapedName := regexp.QuoteMeta(packageName)
+
+	// Pattern to match the dependency line: "package-name": "version"
+	pattern := fmt.Sprintf(`"%s"\s*:\s*"([^"]*)"`, escapedName)
+	re := regexp.MustCompile(pattern)
+
+	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+
+	return ""
+}
+
+// printProgressBar prints a progress bar
+func printProgressBar(current, total int) {
+	const barWidth = 20
+	progress := float64(current) / float64(total)
+	filled := int(progress * barWidth)
+
+	bar := "["
+	for i := 0; i < barWidth; i++ {
+		if i < filled {
+			bar += "="
+		} else {
+			bar += " "
+		}
+	}
+	bar += "]"
+
+	fmt.Printf("\r%s %d/%d %d%%", bar, current, total, int(progress*100))
+	if current == total {
+		fmt.Println() // New line when complete
+	}
 }

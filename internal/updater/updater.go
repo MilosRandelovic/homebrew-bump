@@ -38,22 +38,29 @@ type PubDevPackageInfo struct {
 
 // CheckOutdated checks which dependencies have newer versions available
 func CheckOutdated(dependencies []parser.Dependency, fileType string, verbose bool) ([]OutdatedDependency, error) {
-	var outdated []OutdatedDependency
+	return CheckOutdatedWithProgress(dependencies, fileType, verbose, nil)
+}
 
-	for _, dep := range dependencies {
+// CheckOutdatedWithProgress checks which dependencies have newer versions available with progress callback
+func CheckOutdatedWithProgress(dependencies []parser.Dependency, fileType string, verbose bool, progressCallback func(int, int)) ([]OutdatedDependency, error) {
+	var outdated []OutdatedDependency
+	total := len(dependencies)
+
+	for i, dep := range dependencies {
+		// Update progress
+		if progressCallback != nil {
+			progressCallback(i+1, total)
+		}
+
 		// Skip complex dependencies (git, path, etc.)
 		if strings.HasPrefix(dep.Version, "git:") || strings.HasPrefix(dep.Version, "path:") || dep.Version == "complex" {
-			if verbose {
-				fmt.Printf("Skipping %s (complex dependency: %s)\n", dep.Name, dep.Version)
-			}
+			// Silently skip complex dependencies during progress mode
 			continue
 		}
 
-		latestVersion, err := getLatestVersion(dep.Name, fileType, verbose)
+		latestVersion, err := getLatestVersion(dep.Name, fileType, false) // Don't use verbose here to avoid interfering with progress bar
 		if err != nil {
-			if verbose {
-				fmt.Printf("Error checking %s: %v\n", dep.Name, err)
-			}
+			// Silently continue on error during progress mode
 			continue
 		}
 
