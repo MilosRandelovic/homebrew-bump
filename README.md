@@ -5,7 +5,7 @@ A Go utility that parses `package.json` and `pubspec.yaml` files to check and up
 ## Features
 
 - Parse `package.json` files (NPM dependencies)
-- Parse `pubspec.yaml` files (Dart/Flutter dependencies)
+- Parse `pubspec.yaml` files (Dart/Flutter pub dependencies)
 - Check for outdated dependencies
 - Update dependencies to their latest versions
 - Preserve version prefixes (^, ~, >=, etc.)
