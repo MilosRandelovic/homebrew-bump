@@ -121,15 +121,15 @@ func autoDetectDependencyFile() (string, string, error) {
 	}
 
 	// Check for package.json first
-	packageJSON := filepath.Join(cwd, "package.json")
-	if _, err := os.Stat(packageJSON); err == nil {
-		return packageJSON, "npm", nil
+	packageJson := filepath.Join(cwd, "package.json")
+	if _, err := os.Stat(packageJson); err == nil {
+		return packageJson, "npm", nil
 	}
 
 	// Check for pubspec.yaml
-	pubspecYAML := filepath.Join(cwd, "pubspec.yaml")
-	if _, err := os.Stat(pubspecYAML); err == nil {
-		return pubspecYAML, "dart", nil
+	pubspecYaml := filepath.Join(cwd, "pubspec.yaml")
+	if _, err := os.Stat(pubspecYaml); err == nil {
+		return pubspecYaml, "dart", nil
 	}
 
 	return "", "", fmt.Errorf("no package.json or pubspec.yaml found in current directory")

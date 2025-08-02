@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-func TestParsePackageJSON(t *testing.T) {
+func TestParsePackageJson(t *testing.T) {
 	// Create a temporary package.json file
 	tempDir := t.TempDir()
-	packageJSONPath := filepath.Join(tempDir, "package.json")
-	
-	packageJSONContent := `{
+	packageJsonPath := filepath.Join(tempDir, "package.json")
+
+	packageJsonContent := `{
 		"dependencies": {
 			"react": "^18.0.0",
 			"lodash": "~4.17.20"
@@ -20,45 +20,45 @@ func TestParsePackageJSON(t *testing.T) {
 			"typescript": ">=4.9.0"
 		}
 	}`
-	
-	err := os.WriteFile(packageJSONPath, []byte(packageJSONContent), 0644)
+
+	err := os.WriteFile(packageJsonPath, []byte(packageJsonContent), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	
-	dependencies, err := ParseDependencies(packageJSONPath, "npm")
+
+	dependencies, err := ParseDependencies(packageJsonPath, "npm")
 	if err != nil {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
-	
+
 	if len(dependencies) != 3 {
 		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
 	}
-	
+
 	// Check specific dependencies
 	depMap := make(map[string]string)
 	for _, dep := range dependencies {
 		depMap[dep.Name] = dep.Version
 	}
-	
+
 	if depMap["react"] != "^18.0.0" {
 		t.Errorf("Expected react version '^18.0.0', got '%s'", depMap["react"])
 	}
-	
+
 	if depMap["lodash"] != "~4.17.20" {
 		t.Errorf("Expected lodash version '~4.17.20', got '%s'", depMap["lodash"])
 	}
-	
+
 	if depMap["typescript"] != ">=4.9.0" {
 		t.Errorf("Expected typescript version '>=4.9.0', got '%s'", depMap["typescript"])
 	}
 }
 
-func TestParsePubspecYAML(t *testing.T) {
+func TestParsePubspecYaml(t *testing.T) {
 	// Create a temporary pubspec.yaml file
 	tempDir := t.TempDir()
 	pubspecPath := filepath.Join(tempDir, "pubspec.yaml")
-	
+
 	pubspecContent := `name: test_app
 version: 1.0.0
 
@@ -73,17 +73,17 @@ dev_dependencies:
     sdk: flutter
   mockito: ^5.3.0
 `
-	
+
 	err := os.WriteFile(pubspecPath, []byte(pubspecContent), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	
+
 	dependencies, err := ParseDependencies(pubspecPath, "dart")
 	if err != nil {
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
-	
+
 	// Should have 4 dependencies (http, shared_preferences, flutter_test as complex, mockito)
 	// flutter SDK dependency is skipped, but flutter_test SDK is included as complex
 	if len(dependencies) != 4 {
@@ -92,21 +92,21 @@ dev_dependencies:
 			t.Logf("  %d: %s = %s", i, dep.Name, dep.Version)
 		}
 	}
-	
+
 	// Check specific dependencies
 	depMap := make(map[string]string)
 	for _, dep := range dependencies {
 		depMap[dep.Name] = dep.Version
 	}
-	
+
 	if depMap["http"] != "^0.13.0" {
 		t.Errorf("Expected http version '^0.13.0', got '%s'", depMap["http"])
 	}
-	
+
 	if depMap["shared_preferences"] != "^2.0.0" {
 		t.Errorf("Expected shared_preferences version '^2.0.0', got '%s'", depMap["shared_preferences"])
 	}
-	
+
 	if depMap["mockito"] != "^5.3.0" {
 		t.Errorf("Expected mockito version '^5.3.0', got '%s'", depMap["mockito"])
 	}
@@ -125,7 +125,7 @@ func TestParseVersionFromInterface(t *testing.T) {
 		{map[string]interface{}{"unknown": "value"}, "complex"},
 		{123, ""},
 	}
-	
+
 	for _, test := range tests {
 		result := parseVersionFromInterface(test.input)
 		if result != test.expected {

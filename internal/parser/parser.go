@@ -14,14 +14,14 @@ type Dependency struct {
 	Version string
 }
 
-// PackageJSON represents the structure of a package.json file
-type PackageJSON struct {
+// PackageJson represents the structure of a package.json file
+type PackageJson struct {
 	Dependencies    map[string]string `json:"dependencies,omitempty"`
 	DevDependencies map[string]string `json:"devDependencies,omitempty"`
 }
 
-// PubspecYAML represents the structure of a pubspec.yaml file
-type PubspecYAML struct {
+// PubspecYaml represents the structure of a pubspec.yaml file
+type PubspecYaml struct {
 	Dependencies    map[string]interface{} `yaml:"dependencies,omitempty"`
 	DevDependencies map[string]interface{} `yaml:"dev_dependencies,omitempty"`
 }
@@ -30,22 +30,22 @@ type PubspecYAML struct {
 func ParseDependencies(filePath, fileType string) ([]Dependency, error) {
 	switch fileType {
 	case "npm":
-		return parsePackageJSON(filePath)
+		return parsePackageJson(filePath)
 	case "dart":
-		return parsePubspecYAML(filePath)
+		return parsePubspecYaml(filePath)
 	default:
 		return nil, fmt.Errorf("unsupported file type: %s", fileType)
 	}
 }
 
-// parsePackageJSON parses a package.json file and extracts dependencies
-func parsePackageJSON(filePath string) ([]Dependency, error) {
+// parsePackageJson parses a package.json file and extracts dependencies
+func parsePackageJson(filePath string) ([]Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var pkg PackageJSON
+	var pkg PackageJson
 	if err := json.Unmarshal(data, &pkg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
@@ -71,14 +71,14 @@ func parsePackageJSON(filePath string) ([]Dependency, error) {
 	return dependencies, nil
 }
 
-// parsePubspecYAML parses a pubspec.yaml file and extracts dependencies
-func parsePubspecYAML(filePath string) ([]Dependency, error) {
+// parsePubspecYaml parses a pubspec.yaml file and extracts dependencies
+func parsePubspecYaml(filePath string) ([]Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var pubspec PubspecYAML
+	var pubspec PubspecYaml
 	if err := yaml.Unmarshal(data, &pubspec); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}

@@ -21,8 +21,8 @@ type OutdatedDependency struct {
 	LatestVersion  string
 }
 
-// NPMPackageInfo represents the response from NPM registry
-type NPMPackageInfo struct {
+// NpmPackageInfo represents the response from NPM registry
+type NpmPackageInfo struct {
 	DistTags map[string]string `json:"dist-tags"`
 	Versions map[string]struct {
 		Version string `json:"version"`
@@ -74,7 +74,7 @@ func CheckOutdated(dependencies []parser.Dependency, fileType string, verbose bo
 func getLatestVersion(packageName, fileType string, verbose bool) (string, error) {
 	switch fileType {
 	case "npm":
-		return getNPMLatestVersion(packageName, verbose)
+		return getNpmLatestVersion(packageName, verbose)
 	case "dart":
 		return getPubDevLatestVersion(packageName, verbose)
 	default:
@@ -82,10 +82,10 @@ func getLatestVersion(packageName, fileType string, verbose bool) (string, error
 	}
 }
 
-// getNPMLatestVersion fetches the latest version from NPM registry
-func getNPMLatestVersion(packageName string, verbose bool) (string, error) {
+// getNpmLatestVersion fetches the latest version from NPM registry
+func getNpmLatestVersion(packageName string, verbose bool) (string, error) {
 	url := fmt.Sprintf("https://registry.npmjs.org/%s", packageName)
-	
+
 	if verbose {
 		fmt.Printf("Checking NPM package: %s\n", packageName)
 	}
@@ -106,7 +106,7 @@ func getNPMLatestVersion(packageName string, verbose bool) (string, error) {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var packageInfo NPMPackageInfo
+	var packageInfo NpmPackageInfo
 	if err := json.Unmarshal(body, &packageInfo); err != nil {
 		return "", fmt.Errorf("failed to parse NPM response: %w", err)
 	}
@@ -121,7 +121,7 @@ func getNPMLatestVersion(packageName string, verbose bool) (string, error) {
 // getPubDevLatestVersion fetches the latest version from pub.dev API
 func getPubDevLatestVersion(packageName string, verbose bool) (string, error) {
 	url := fmt.Sprintf("https://pub.dev/api/packages/%s", packageName)
-	
+
 	if verbose {
 		fmt.Printf("Checking pub.dev package: %s\n", packageName)
 	}
@@ -161,69 +161,66 @@ func cleanVersion(version string) string {
 func UpdateDependencies(filePath string, outdated []OutdatedDependency, fileType string, verbose bool) error {
 	switch fileType {
 	case "npm":
-		return updatePackageJSON(filePath, outdated, verbose)
+		return updatePackageJson(filePath, outdated, verbose)
 	case "dart":
-		return updatePubspecYAML(filePath, outdated, verbose)
+		return updatePubspecYaml(filePath, outdated, verbose)
 	default:
 		return fmt.Errorf("unsupported file type: %s", fileType)
 	}
 }
 
-// updatePackageJSON updates dependencies in a package.json file
-func updatePackageJSON(filePath string, outdated []OutdatedDependency, verbose bool) error {
+// updatePackageJson updates dependencies in a package.json file
+func updatePackageJson(filePath string, outdated []OutdatedDependency, verbose bool) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var pkg parser.PackageJSON
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		return fmt.Errorf("failed to parse JSON: %w", err)
-	}
+	// Convert to string for regex replacement
+	content := string(data)
 
-	// Update dependencies
+	// Update each outdated dependency using regex
 	for _, dep := range outdated {
-		if pkg.Dependencies != nil {
-			if oldVersion, exists := pkg.Dependencies[dep.Name]; exists {
-				prefix := getVersionPrefix(oldVersion)
-				pkg.Dependencies[dep.Name] = prefix + dep.LatestVersion
-				if verbose {
-					fmt.Printf("Updated %s: %s -> %s\n", dep.Name, oldVersion, pkg.Dependencies[dep.Name])
-				}
-			}
-		}
-		if pkg.DevDependencies != nil {
-			if oldVersion, exists := pkg.DevDependencies[dep.Name]; exists {
-				prefix := getVersionPrefix(oldVersion)
-				pkg.DevDependencies[dep.Name] = prefix + dep.LatestVersion
-				if verbose {
-					fmt.Printf("Updated %s: %s -> %s\n", dep.Name, oldVersion, pkg.DevDependencies[dep.Name])
-				}
+		// Escape special regex characters in package name
+		escapedName := regexp.QuoteMeta(dep.Name)
+
+		// Pattern to match the dependency line: "package-name": "version"
+		pattern := fmt.Sprintf(`"%s"\s*:\s*"([^"]*)"`, escapedName)
+		re := regexp.MustCompile(pattern)
+
+		// Find and replace
+		matches := re.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			oldVersion := matches[1]
+			prefix := getVersionPrefix(oldVersion)
+			newVersion := prefix + dep.LatestVersion
+
+			// Replace the version while keeping the same structure
+			replacement := fmt.Sprintf(`"%s": "%s"`, dep.Name, newVersion)
+			content = re.ReplaceAllString(content, replacement)
+
+			if verbose {
+				fmt.Printf("Updated %s: %s -> %s\n", dep.Name, oldVersion, newVersion)
 			}
 		}
 	}
 
-	// Write back to file with proper formatting
-	updatedData, err := json.MarshalIndent(pkg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-
-	if err := os.WriteFile(filePath, updatedData, 0644); err != nil {
+	// Write back to file
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
 	return nil
 }
 
-// updatePubspecYAML updates dependencies in a pubspec.yaml file
-func updatePubspecYAML(filePath string, outdated []OutdatedDependency, verbose bool) error {
+// updatePubspecYaml updates dependencies in a pubspec.yaml file
+func updatePubspecYaml(filePath string, outdated []OutdatedDependency, verbose bool) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var pubspec parser.PubspecYAML
+	var pubspec parser.PubspecYaml
 	if err := yaml.Unmarshal(data, &pubspec); err != nil {
 		return fmt.Errorf("failed to parse YAML: %w", err)
 	}
