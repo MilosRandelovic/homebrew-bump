@@ -61,7 +61,7 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 			continue
 		}
 
-		latestVersion, err := registryClient.GetLatestVersion(dep.Name, verbose)
+		latestVersion, err := registryClient.GetLatestVersionFromRegistry(dep.Name, dep.HostedURL, verbose)
 		if err != nil {
 			errors = append(errors, shared.DependencyError{
 				Name:  dep.Name,
@@ -96,6 +96,7 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 				CurrentVersion:  currentVersion,
 				LatestVersion:   latestVersion,
 				OriginalVersion: dep.OriginalVersion,
+				HostedURL:       dep.HostedURL,
 			})
 		}
 	}

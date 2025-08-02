@@ -27,25 +27,52 @@ func (u *Updater) UpdateDependencies(filePath string, outdated []shared.Outdated
 
 	// Update each outdated dependency
 	for _, dep := range outdated {
-		oldVersionPattern := fmt.Sprintf(`(\s+%s:\s*)([^\s\n]+)`, regexp.QuoteMeta(dep.Name))
-		re := regexp.MustCompile(oldVersionPattern)
+		var updated bool
 
-		// Find the current version in the file
-		matches := re.FindStringSubmatch(content)
-		if len(matches) >= 3 {
-			currentVersionInFile := matches[2]
-			// Preserve the version prefix from the original
-			prefix := shared.GetVersionPrefix(currentVersionInFile)
-			newVersion := prefix + dep.LatestVersion
+		// For hosted packages, look for the version field within the hosted package block
+		if dep.HostedURL != "" {
+			// Pattern for hosted packages: look for version field after the package name
+			hostedPattern := fmt.Sprintf(`(\s+%s:\s*\n(?:\s+hosted:[^\n]+\n)?\s+version:\s*)([^\s\n]+)`, regexp.QuoteMeta(dep.Name))
+			hostedRe := regexp.MustCompile(hostedPattern)
 
-			// Replace the version
-			replacement := matches[1] + newVersion
-			content = re.ReplaceAllString(content, replacement)
+			matches := hostedRe.FindStringSubmatch(content)
+			if len(matches) >= 3 {
+				currentVersionInFile := matches[2]
+				prefix := shared.GetVersionPrefix(currentVersionInFile)
+				newVersion := prefix + dep.LatestVersion
 
-			if verbose {
-				fmt.Printf("Updated %s: %s -> %s\n", dep.Name, currentVersionInFile, newVersion)
+				replacement := matches[1] + newVersion
+				content = hostedRe.ReplaceAllString(content, replacement)
+				updated = true
+
+				if verbose {
+					fmt.Printf("Updated %s: %s -> %s\n", dep.Name, currentVersionInFile, newVersion)
+				}
 			}
-		} else if verbose {
+		}
+
+		// If not updated yet, try the simple pattern for regular dependencies
+		if !updated {
+			oldVersionPattern := fmt.Sprintf(`(\s+%s:\s*)([^\s\n]+)`, regexp.QuoteMeta(dep.Name))
+			re := regexp.MustCompile(oldVersionPattern)
+
+			matches := re.FindStringSubmatch(content)
+			if len(matches) >= 3 {
+				currentVersionInFile := matches[2]
+				prefix := shared.GetVersionPrefix(currentVersionInFile)
+				newVersion := prefix + dep.LatestVersion
+
+				replacement := matches[1] + newVersion
+				content = re.ReplaceAllString(content, replacement)
+				updated = true
+
+				if verbose {
+					fmt.Printf("Updated %s: %s -> %s\n", dep.Name, currentVersionInFile, newVersion)
+				}
+			}
+		}
+
+		if !updated && verbose {
 			fmt.Printf("Warning: Could not find %s in file for updating\n", dep.Name)
 		}
 	}

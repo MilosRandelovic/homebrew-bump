@@ -49,6 +49,8 @@ func (u *Updater) UpdateDependencies(filePath string, outdated []shared.Outdated
 			if verbose {
 				fmt.Printf("Updated %s: %s -> %s\n", dep.Name, oldVersion, newVersion)
 			}
+		} else if verbose {
+			fmt.Printf("Warning: Could not find %s in file for updating\n", dep.Name)
 		}
 	}
 

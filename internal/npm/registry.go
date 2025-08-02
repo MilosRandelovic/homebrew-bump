@@ -30,6 +30,11 @@ func NewRegistryClient() *RegistryClient {
 
 // GetLatestVersion fetches the latest version from NPM registry
 func (c *RegistryClient) GetLatestVersion(packageName string, verbose bool) (string, error) {
+	return c.GetLatestVersionFromRegistry(packageName, "", verbose)
+}
+
+// GetLatestVersionFromRegistry fetches the latest version from a specific registry
+func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
 	// Parse .npmrc configuration from both local and global files
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -42,12 +47,19 @@ func (c *RegistryClient) GetLatestVersion(packageName string, verbose bool) (str
 		return "", fmt.Errorf("failed to parse .npmrc: %w", err)
 	}
 
-	// Get the appropriate registry for this package
-	registryURL := getRegistryForPackage(packageName, npmrcConfig)
-	url := fmt.Sprintf("%s/%s", registryURL, packageName)
+	var targetRegistryURL string
+	if registryURL != "" {
+		// Use specified registry
+		targetRegistryURL = registryURL
+	} else {
+		// Get the appropriate registry for this package
+		targetRegistryURL = getRegistryForPackage(packageName, npmrcConfig)
+	}
+
+	url := fmt.Sprintf("%s/%s", targetRegistryURL, packageName)
 
 	if verbose {
-		fmt.Printf("Checking NPM package: %s (registry: %s)\n", packageName, registryURL)
+		fmt.Printf("Checking NPM package: %s (registry: %s)\n", packageName, targetRegistryURL)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -57,10 +69,10 @@ func (c *RegistryClient) GetLatestVersion(packageName string, verbose bool) (str
 	}
 
 	// Add authentication if available for this registry
-	if authToken := getAuthTokenForRegistry(registryURL, npmrcConfig); authToken != "" {
+	if authToken := getAuthTokenForRegistry(targetRegistryURL, npmrcConfig); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
 		if verbose {
-			fmt.Printf("Using authentication for registry: %s\n", registryURL)
+			fmt.Printf("Using authentication for registry: %s\n", targetRegistryURL)
 		}
 	}
 

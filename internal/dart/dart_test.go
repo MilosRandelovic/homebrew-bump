@@ -44,21 +44,23 @@ dev_dependencies:
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
 
-	// Should exclude flutter SDK dependency, private hosted packages, and 'any' versions
-	// Should include: http, path, pubdev_hosted, test = 4 dependencies
-	if len(dependencies) != 4 {
-		t.Errorf("Expected 4 dependencies, got %d", len(dependencies))
+	// Should exclude flutter SDK dependency and 'any' versions
+	// Should include: http, path, pubdev_hosted, private_package, test = 5 dependencies
+	if len(dependencies) != 5 {
+		t.Errorf("Expected 5 dependencies, got %d", len(dependencies))
 		for _, dep := range dependencies {
-			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+			t.Logf("Found dependency: %s - %s (hosted: %s)", dep.Name, dep.OriginalVersion, dep.HostedURL)
 		}
 	}
 
 	// Check specific dependencies
 	cleanVersionMap := make(map[string]string)
 	originalVersionMap := make(map[string]string)
+	hostedURLMap := make(map[string]string)
 	for _, dep := range dependencies {
 		cleanVersionMap[dep.Name] = dep.Version
 		originalVersionMap[dep.Name] = dep.OriginalVersion
+		hostedURLMap[dep.Name] = dep.HostedURL
 	}
 
 	// Check clean versions (without prefixes)
@@ -93,9 +95,17 @@ dev_dependencies:
 		t.Errorf("Expected intl ('any' version) to be excluded, but it was found with version '%s'", originalVersionMap["intl"])
 	}
 
-	// Check that private hosted packages are excluded
-	if _, exists := originalVersionMap["private_package"]; exists {
-		t.Errorf("Expected private_package to be excluded, but it was found with version '%s'", originalVersionMap["private_package"])
+	// Check that private hosted packages are included with correct hosted URL
+	if originalVersionMap["private_package"] != "^0.0.1" {
+		t.Errorf("Expected private_package original version '^0.0.1', got '%s'", originalVersionMap["private_package"])
+	}
+	if hostedURLMap["private_package"] != "https://private.registry.com/pub" {
+		t.Errorf("Expected private_package hosted URL 'https://private.registry.com/pub', got '%s'", hostedURLMap["private_package"])
+	}
+
+	// Check that pub.dev packages have empty hosted URL
+	if hostedURLMap["http"] != "" {
+		t.Errorf("Expected http to have empty hosted URL, got '%s'", hostedURLMap["http"])
 	}
 }
 
@@ -232,12 +242,12 @@ dependencies:
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
 
-	// Should only include: http, pubdev_hosted = 2 dependencies ('any' versions are filtered out)
-	expectedDeps := []string{"http", "pubdev_hosted"}
+	// Should include: http, pubdev_hosted, private_pkg = 3 dependencies ('any' versions are filtered out)
+	expectedDeps := []string{"http", "pubdev_hosted", "private_pkg"}
 	if len(dependencies) != len(expectedDeps) {
 		t.Errorf("Expected %d dependencies, got %d", len(expectedDeps), len(dependencies))
 		for _, dep := range dependencies {
-			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+			t.Logf("Found dependency: %s - %s (hosted: %s)", dep.Name, dep.OriginalVersion, dep.HostedURL)
 		}
 	}
 
@@ -262,10 +272,23 @@ dependencies:
 		if dep.Version != "1.0.0" {
 			t.Errorf("Expected pubdev_hosted cleaned version '1.0.0', got '%s'", dep.Version)
 		}
+		if dep.HostedURL != "" {
+			t.Errorf("Expected pubdev_hosted to have empty hosted URL, got '%s'", dep.HostedURL)
+		}
+	}
+
+	// Check private hosted package
+	if dep, exists := depMap["private_pkg"]; exists {
+		if dep.OriginalVersion != "1.0.0" {
+			t.Errorf("Expected private_pkg original version '1.0.0', got '%s'", dep.OriginalVersion)
+		}
+		if dep.HostedURL != "https://private-registry.example.com" {
+			t.Errorf("Expected private_pkg hosted URL 'https://private-registry.example.com', got '%s'", dep.HostedURL)
+		}
 	}
 
 	// Verify excluded dependencies (including 'any' versions)
-	excludedDeps := []string{"flutter", "flutter_localizations", "private_pkg1", "private_pkg2", "git_pkg", "local_pkg", "intl"}
+	excludedDeps := []string{"flutter", "flutter_localizations", "git_pkg", "local_pkg", "intl"}
 	for _, excludedName := range excludedDeps {
 		if _, exists := depMap[excludedName]; exists {
 			t.Errorf("Dependency '%s' should have been excluded but was found", excludedName)
@@ -421,6 +444,265 @@ custom_config:
 	for _, dep := range unchangedDeps {
 		if !strings.Contains(updatedStr, dep) {
 			t.Errorf("Unchanged dependency missing: %s", dep)
+		}
+	}
+}
+
+func TestUpdateHostedPackages(t *testing.T) {
+	// Create a pubspec.yaml with hosted packages
+	tempDir := t.TempDir()
+	pubspecPath := filepath.Join(tempDir, "pubspec.yaml")
+
+	pubspecContent := `name: test_app
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Regular pub.dev dependency
+  http: ^0.13.0
+
+  # Private hosted package
+  company_core:
+    hosted: https://packages.company.com/pub
+    version: ^1.0.0
+
+  # Another private hosted package
+  internal_tools:
+    hosted: https://internal-registry.example.com/pub/
+    version: ~2.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Private dev dependency
+  company_test_utils:
+    hosted: https://packages.company.com/pub
+    version: ^0.3.0`
+
+	err := os.WriteFile(pubspecPath, []byte(pubspecContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Mock outdated hosted dependencies
+	outdated := []shared.OutdatedDependency{
+		{
+			Name:            "company_core",
+			CurrentVersion:  "1.0.0",
+			LatestVersion:   "1.2.0",
+			OriginalVersion: "^1.0.0",
+			HostedURL:       "https://packages.company.com/pub",
+		},
+		{
+			Name:            "internal_tools",
+			CurrentVersion:  "2.5.0",
+			LatestVersion:   "2.6.1",
+			OriginalVersion: "~2.5.0",
+			HostedURL:       "https://internal-registry.example.com/pub/",
+		},
+		{
+			Name:            "http",
+			CurrentVersion:  "0.13.0",
+			LatestVersion:   "0.13.5",
+			OriginalVersion: "^0.13.0",
+		},
+	}
+
+	updater := NewUpdater()
+	err = updater.UpdateDependencies(pubspecPath, outdated, false, false)
+	if err != nil {
+		t.Fatalf("Failed to update pubspec.yaml: %v", err)
+	}
+
+	// Read and verify the updated file
+	updatedContent, err := os.ReadFile(pubspecPath)
+	if err != nil {
+		t.Fatalf("Failed to read updated file: %v", err)
+	}
+
+	updatedStr := string(updatedContent)
+
+	// Verify that versions were updated correctly
+	if !strings.Contains(updatedStr, "http: ^0.13.5") {
+		t.Errorf("http version not updated correctly")
+	}
+
+	// Check hosted package updates - these should update the version field, not the hosted field
+	if !strings.Contains(updatedStr, "version: ^1.2.0") {
+		t.Errorf("company_core version not updated correctly")
+	}
+	if !strings.Contains(updatedStr, "version: ~2.6.1") {
+		t.Errorf("internal_tools version not updated correctly")
+	}
+
+	// Verify hosted URLs are preserved
+	if !strings.Contains(updatedStr, "hosted: https://packages.company.com/pub") {
+		t.Errorf("company_core hosted URL not preserved")
+	}
+	if !strings.Contains(updatedStr, "hosted: https://internal-registry.example.com/pub/") {
+		t.Errorf("internal_tools hosted URL not preserved")
+	}
+
+	// Verify unchanged dependency
+	if !strings.Contains(updatedStr, "company_test_utils:") {
+		t.Errorf("company_test_utils should remain unchanged")
+	}
+}
+
+func TestParsePubTokensFile(t *testing.T) {
+	// Create a temporary pub-tokens.json file
+	tempDir := t.TempDir()
+	pubTokensPath := filepath.Join(tempDir, "pub-tokens.json")
+
+	pubTokensContent := `{
+  "version": 1,
+  "hosted": [
+    {
+      "url": "https://packages.company.com/pub/",
+      "token": "company_token_123"
+    },
+    {
+      "url": "https://internal-registry.example.com/pub",
+      "token": "internal_token_456"
+    }
+  ]
+}`
+
+	err := os.WriteFile(pubTokensPath, []byte(pubTokensContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test pub-tokens.json file: %v", err)
+	}
+
+	// Create config to parse into
+	config := &PubConfig{
+		Registries: make(map[string]RegistryConfig),
+	}
+
+	// Add default pub.dev registry
+	config.Registries["pub.dev"] = RegistryConfig{
+		URL: "https://pub.dev",
+	}
+
+	err = parsePubTokensFile(pubTokensPath, config)
+	if err != nil {
+		t.Fatalf("Failed to parse pub-tokens.json file: %v", err)
+	}
+
+	// Test that registries were added correctly
+	expectedRegistries := map[string]struct {
+		url   string
+		token string
+	}{
+		"packages.company.com": {
+			url:   "https://packages.company.com/pub/",
+			token: "company_token_123",
+		},
+		"internal-registry.example.com": {
+			url:   "https://internal-registry.example.com/pub",
+			token: "internal_token_456",
+		},
+		"pub.dev": {
+			url:   "https://pub.dev",
+			token: "",
+		},
+	}
+
+	if len(config.Registries) != len(expectedRegistries) {
+		t.Errorf("Expected %d registries, got %d", len(expectedRegistries), len(config.Registries))
+	}
+
+	for hostname, expected := range expectedRegistries {
+		if registry, exists := config.Registries[hostname]; !exists {
+			t.Errorf("Expected registry for hostname '%s' not found", hostname)
+		} else {
+			if registry.URL != expected.url {
+				t.Errorf("Expected URL for %s to be '%s', got '%s'", hostname, expected.url, registry.URL)
+			}
+			if registry.AuthToken != expected.token {
+				t.Errorf("Expected token for %s to be '%s', got '%s'", hostname, expected.token, registry.AuthToken)
+			}
+		}
+	}
+}
+
+func TestPubConfigIntegration(t *testing.T) {
+	// This test verifies the full integration of parsing pub configuration
+	// Create temporary directories to simulate the real environment
+	tempDir := t.TempDir()
+
+	// Create fake home directory structure
+	homeDir := filepath.Join(tempDir, "home")
+	dartDir := filepath.Join(homeDir, "Library", "Application Support", "dart")
+	err := os.MkdirAll(dartDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create dart directory: %v", err)
+	}
+
+	// Create pub-tokens.json
+	pubTokensPath := filepath.Join(dartDir, "pub-tokens.json")
+	pubTokensContent := `{
+  "version": 1,
+  "hosted": [
+    {
+      "url": "https://registry.api.hectre.com/pub/",
+      "token": "hectre_token_xyz"
+    },
+    {
+      "url": "https://packages.company.com/pub",
+      "token": "company_token_abc"
+    }
+  ]
+}`
+
+	err = os.WriteFile(pubTokensPath, []byte(pubTokensContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create pub-tokens.json: %v", err)
+	}
+
+	// Save and set temporary HOME
+	originalHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", originalHome)
+	os.Setenv("HOME", homeDir)
+
+	// Test the full configuration parsing
+	config, err := parsePubConfig()
+	if err != nil {
+		t.Fatalf("Failed to parse pub config: %v", err)
+	}
+
+	// Verify default pub.dev registry is present
+	if registry, exists := config.Registries["pub.dev"]; !exists {
+		t.Errorf("Default pub.dev registry not found")
+	} else if registry.URL != "https://pub.dev" {
+		t.Errorf("Expected pub.dev URL to be 'https://pub.dev', got '%s'", registry.URL)
+	}
+
+	// Verify pub-tokens.json registries
+	expectedRegistries := map[string]struct {
+		url   string
+		token string
+	}{
+		"registry.api.hectre.com": {
+			url:   "https://registry.api.hectre.com/pub/",
+			token: "hectre_token_xyz",
+		},
+		"packages.company.com": {
+			url:   "https://packages.company.com/pub",
+			token: "company_token_abc",
+		},
+	}
+
+	for hostname, expected := range expectedRegistries {
+		if registry, exists := config.Registries[hostname]; !exists {
+			t.Errorf("Registry for hostname '%s' from pub-tokens.json not found", hostname)
+		} else {
+			if registry.URL != expected.url {
+				t.Errorf("Expected URL for %s to be '%s', got '%s'", hostname, expected.url, registry.URL)
+			}
+			if registry.AuthToken != expected.token {
+				t.Errorf("Expected token for %s to be '%s', got '%s'", hostname, expected.token, registry.AuthToken)
+			}
 		}
 	}
 }

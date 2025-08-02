@@ -356,3 +356,348 @@ func TestGetFileType(t *testing.T) {
 		t.Errorf("Expected file type 'npm', got '%s'", registry.GetFileType())
 	}
 }
+
+func TestParseScopedPackages(t *testing.T) {
+	// Create a temporary package.json file with scoped packages
+	tempDir := t.TempDir()
+	packageJsonPath := filepath.Join(tempDir, "package.json")
+
+	packageJsonContent := `{
+		"dependencies": {
+			"react": "^18.0.0",
+			"@company/private-pkg": "^1.2.3",
+			"@angular/core": "^16.0.0",
+			"@types/node": "^20.0.0"
+		},
+		"devDependencies": {
+			"@company/dev-tools": "~2.1.0",
+			"@babel/core": ">=7.22.0"
+		}
+	}`
+
+	err := os.WriteFile(packageJsonPath, []byte(packageJsonContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(packageJsonPath)
+	if err != nil {
+		t.Fatalf("Failed to parse package.json: %v", err)
+	}
+
+	// Should include all 6 dependencies including scoped ones
+	if len(dependencies) != 6 {
+		t.Errorf("Expected 6 dependencies, got %d", len(dependencies))
+		for _, dep := range dependencies {
+			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+		}
+	}
+
+	// Create maps for easier testing
+	cleanVersionMap := make(map[string]string)
+	originalVersionMap := make(map[string]string)
+	for _, dep := range dependencies {
+		cleanVersionMap[dep.Name] = dep.Version
+		originalVersionMap[dep.Name] = dep.OriginalVersion
+	}
+
+	// Test scoped package parsing
+	expectedDeps := map[string]struct {
+		cleanVersion    string
+		originalVersion string
+	}{
+		"react":                {"18.0.0", "^18.0.0"},
+		"@company/private-pkg": {"1.2.3", "^1.2.3"},
+		"@angular/core":        {"16.0.0", "^16.0.0"},
+		"@types/node":          {"20.0.0", "^20.0.0"},
+		"@company/dev-tools":   {"2.1.0", "~2.1.0"},
+		"@babel/core":          {"7.22.0", ">=7.22.0"},
+	}
+
+	for name, expected := range expectedDeps {
+		if cleanVersionMap[name] != expected.cleanVersion {
+			t.Errorf("Expected %s clean version '%s', got '%s'", name, expected.cleanVersion, cleanVersionMap[name])
+		}
+		if originalVersionMap[name] != expected.originalVersion {
+			t.Errorf("Expected %s original version '%s', got '%s'", name, expected.originalVersion, originalVersionMap[name])
+		}
+	}
+}
+
+func TestUpdateScopedPackages(t *testing.T) {
+	// Create a temporary package.json file with scoped packages
+	tempDir := t.TempDir()
+	packageJsonPath := filepath.Join(tempDir, "package.json")
+
+	packageJsonContent := `{
+  "dependencies": {
+    "react": "^18.0.0",
+    "@company/private-pkg": "^1.2.3",
+    "@angular/core": "^16.0.0"
+  },
+  "devDependencies": {
+    "@company/dev-tools": "~2.1.0",
+    "@babel/core": ">=7.22.0"
+  }
+}`
+
+	err := os.WriteFile(packageJsonPath, []byte(packageJsonContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Mock outdated scoped dependencies
+	outdated := []shared.OutdatedDependency{
+		{
+			Name:            "@company/private-pkg",
+			CurrentVersion:  "1.2.3",
+			LatestVersion:   "1.3.0",
+			OriginalVersion: "^1.2.3",
+		},
+		{
+			Name:            "@angular/core",
+			CurrentVersion:  "16.0.0",
+			LatestVersion:   "16.2.0",
+			OriginalVersion: "^16.0.0",
+		},
+		{
+			Name:            "@babel/core",
+			CurrentVersion:  "7.22.0",
+			LatestVersion:   "7.22.5",
+			OriginalVersion: ">=7.22.0",
+		},
+	}
+
+	updater := NewUpdater()
+	err = updater.UpdateDependencies(packageJsonPath, outdated, false, false)
+	if err != nil {
+		t.Fatalf("Failed to update package.json: %v", err)
+	}
+
+	// Read and verify the updated file
+	updatedContent, err := os.ReadFile(packageJsonPath)
+	if err != nil {
+		t.Fatalf("Failed to read updated file: %v", err)
+	}
+
+	updatedStr := string(updatedContent)
+
+	// Check that scoped packages were updated correctly with prefixes preserved
+	expectedUpdates := map[string]string{
+		`"@company/private-pkg": "^1.3.0"`: "@company/private-pkg should be updated to ^1.3.0",
+		`"@angular/core": "^16.2.0"`:       "@angular/core should be updated to ^16.2.0",
+		`"@babel/core": ">=7.22.5"`:        "@babel/core should be updated to >=7.22.5",
+	}
+
+	for expectedText, errorMsg := range expectedUpdates {
+		if !strings.Contains(updatedStr, expectedText) {
+			t.Errorf("%s, but got: %s", errorMsg, updatedStr)
+		}
+	}
+
+	// Verify unchanged dependencies
+	if !strings.Contains(updatedStr, `"react": "^18.0.0"`) {
+		t.Errorf("React version should not have changed")
+	}
+	if !strings.Contains(updatedStr, `"@company/dev-tools": "~2.1.0"`) {
+		t.Errorf("@company/dev-tools version should not have changed")
+	}
+}
+
+func TestParseNpmrcFile(t *testing.T) {
+	// Create a temporary .npmrc file
+	tempDir := t.TempDir()
+	npmrcPath := filepath.Join(tempDir, ".npmrc")
+
+	npmrcContent := `# NPM configuration
+registry=https://registry.npmjs.org/
+@company:registry=https://npm.company.com
+@internal:registry=https://internal-registry.example.com/
+
+# Authentication tokens
+//npm.company.com/:_authToken=company_token_123
+//internal-registry.example.com/:_authToken="internal_token_456"
+//registry.example.com/:_authToken='quoted_token_789'
+
+# Comments and empty lines should be ignored
+
+; Semicolon comments too
+`
+
+	err := os.WriteFile(npmrcPath, []byte(npmrcContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test .npmrc file: %v", err)
+	}
+
+	config, err := parseNpmrcFile(npmrcPath)
+	if err != nil {
+		t.Fatalf("Failed to parse .npmrc file: %v", err)
+	}
+
+	// Test scope registries
+	expectedScopeRegistries := map[string]string{
+		"@company":  "https://npm.company.com",
+		"@internal": "https://internal-registry.example.com/",
+	}
+
+	for scope, expectedRegistry := range expectedScopeRegistries {
+		if actualRegistry, exists := config.ScopeRegistries[scope]; !exists {
+			t.Errorf("Expected scope registry for %s not found", scope)
+		} else if actualRegistry != expectedRegistry {
+			t.Errorf("Expected scope registry for %s to be '%s', got '%s'", scope, expectedRegistry, actualRegistry)
+		}
+	}
+
+	// Test auth tokens (should strip quotes)
+	expectedAuthTokens := map[string]string{
+		"npm.company.com":               "company_token_123",
+		"internal-registry.example.com": "internal_token_456",
+		"registry.example.com":          "quoted_token_789",
+	}
+
+	for registry, expectedToken := range expectedAuthTokens {
+		if actualToken, exists := config.AuthTokens[registry]; !exists {
+			t.Errorf("Expected auth token for %s not found", registry)
+		} else if actualToken != expectedToken {
+			t.Errorf("Expected auth token for %s to be '%s', got '%s'", registry, expectedToken, actualToken)
+		}
+	}
+}
+
+func TestParseNpmrcFilesWithGlobalAndLocal(t *testing.T) {
+	// Create temporary directories
+	tempDir := t.TempDir()
+	homeDir := filepath.Join(tempDir, "home")
+	projectDir := filepath.Join(tempDir, "project")
+
+	err := os.MkdirAll(homeDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create home directory: %v", err)
+	}
+	err = os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create project directory: %v", err)
+	}
+
+	// Create global .npmrc (in home directory)
+	globalNpmrcPath := filepath.Join(homeDir, ".npmrc")
+	globalNpmrcContent := `@company:registry=https://global.company.com
+//global.company.com/:_authToken=global_token
+//shared-registry.com/:_authToken=global_shared_token`
+
+	err = os.WriteFile(globalNpmrcPath, []byte(globalNpmrcContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create global .npmrc file: %v", err)
+	}
+
+	// Create local .npmrc (in project directory)
+	localNpmrcPath := filepath.Join(projectDir, ".npmrc")
+	localNpmrcContent := `@company:registry=https://local.company.com
+@internal:registry=https://internal.example.com
+//local.company.com/:_authToken=local_token
+//shared-registry.com/:_authToken=local_shared_token`
+
+	err = os.WriteFile(localNpmrcPath, []byte(localNpmrcContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create local .npmrc file: %v", err)
+	}
+
+	// Set HOME environment variable temporarily
+	originalHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", originalHome)
+	os.Setenv("HOME", homeDir)
+
+	// Test parseNpmrcFiles function
+	config, err := parseNpmrcFiles(localNpmrcPath)
+	if err != nil {
+		t.Fatalf("Failed to parse .npmrc files: %v", err)
+	}
+
+	// Local scope registries should override global ones
+	if config.ScopeRegistries["@company"] != "https://local.company.com" {
+		t.Errorf("Expected local @company registry to override global, got '%s'", config.ScopeRegistries["@company"])
+	}
+
+	// Local-only scope registries should be present
+	if config.ScopeRegistries["@internal"] != "https://internal.example.com" {
+		t.Errorf("Expected @internal registry to be '%s', got '%s'", "https://internal.example.com", config.ScopeRegistries["@internal"])
+	}
+
+	// Local auth tokens should override global ones
+	if config.AuthTokens["shared-registry.com"] != "local_shared_token" {
+		t.Errorf("Expected local shared token to override global, got '%s'", config.AuthTokens["shared-registry.com"])
+	}
+
+	// Local-only auth tokens should be present
+	if config.AuthTokens["local.company.com"] != "local_token" {
+		t.Errorf("Expected local.company.com token to be 'local_token', got '%s'", config.AuthTokens["local.company.com"])
+	}
+
+	// Global-only auth tokens should be present
+	if config.AuthTokens["global.company.com"] != "global_token" {
+		t.Errorf("Expected global.company.com token to be 'global_token', got '%s'", config.AuthTokens["global.company.com"])
+	}
+}
+
+func TestGetRegistryForPackage(t *testing.T) {
+	config := &NpmConfig{
+		ScopeRegistries: map[string]string{
+			"@company":  "https://npm.company.com",
+			"@internal": "https://internal-registry.example.com",
+		},
+		AuthTokens: map[string]string{
+			"npm.company.com": "company_token",
+		},
+	}
+
+	tests := []struct {
+		packageName      string
+		expectedRegistry string
+	}{
+		{"@company/package", "https://npm.company.com"},
+		{"@internal/tool", "https://internal-registry.example.com"},
+		{"@unknown/package", "https://registry.npmjs.org"},
+		{"regular-package", "https://registry.npmjs.org"},
+		{"@malformed", "https://registry.npmjs.org"},
+	}
+
+	for _, test := range tests {
+		actualRegistry := getRegistryForPackage(test.packageName, config)
+		if actualRegistry != test.expectedRegistry {
+			t.Errorf("For package '%s', expected registry '%s', got '%s'",
+				test.packageName, test.expectedRegistry, actualRegistry)
+		}
+	}
+}
+
+func TestGetAuthTokenForRegistry(t *testing.T) {
+	config := &NpmConfig{
+		ScopeRegistries: map[string]string{},
+		AuthTokens: map[string]string{
+			"npm.company.com":      "company_token",
+			"registry.example.com": "example_token",
+			"internal.corp.com":    "internal_token",
+		},
+	}
+
+	tests := []struct {
+		registryURL   string
+		expectedToken string
+	}{
+		{"https://npm.company.com", "company_token"},
+		{"https://npm.company.com/", "company_token"},
+		{"https://registry.example.com", "example_token"},
+		{"https://internal.corp.com/npm", "internal_token"},
+		{"https://unknown-registry.com", ""},
+		{"http://npm.company.com", "company_token"}, // Same hostname, same token regardless of protocol
+	}
+
+	for _, test := range tests {
+		actualToken := getAuthTokenForRegistry(test.registryURL, config)
+		if actualToken != test.expectedToken {
+			t.Errorf("For registry '%s', expected token '%s', got '%s'",
+				test.registryURL, test.expectedToken, actualToken)
+		}
+	}
+}

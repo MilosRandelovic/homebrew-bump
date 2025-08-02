@@ -5,6 +5,7 @@ type Dependency struct {
 	Name            string
 	Version         string // Clean version for API calls (e.g., "1.2.3")
 	OriginalVersion string // Original version with prefixes (e.g., "^1.2.3")
+	HostedURL       string // For hosted packages, the registry URL (empty for pub.dev/npmjs.org)
 }
 
 // OutdatedDependency represents a dependency that has a newer version available
@@ -13,6 +14,7 @@ type OutdatedDependency struct {
 	CurrentVersion  string
 	LatestVersion   string
 	OriginalVersion string // Original version with prefixes (e.g., "^1.2.3")
+	HostedURL       string // For hosted packages, the registry URL (empty for pub.dev/npmjs.org)
 }
 
 // CheckResult contains the results of checking dependencies
@@ -59,5 +61,6 @@ type Updater interface {
 // RegistryClient interface defines the contract for fetching package information
 type RegistryClient interface {
 	GetLatestVersion(packageName string, verbose bool) (string, error)
+	GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error)
 	GetFileType() string
 }

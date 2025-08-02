@@ -45,13 +45,17 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 		}
 
 		version := parseVersionFromInterface(versionInterface)
-		// Skip SDK dependencies, empty versions, 'any' versions, path, git, and hosted packages from private registries
+		// Skip SDK dependencies, empty versions, 'any' versions, path, git dependencies
 		if version == "" || version == "any" || strings.HasPrefix(version, "sdk:") || strings.HasPrefix(version, "path:") || strings.HasPrefix(version, "git:") {
 			continue
 		}
 
-		// Skip hosted packages from private registries (not pub.dev)
+		// Handle hosted packages
 		if strings.HasPrefix(version, "hosted:") {
+			dep := parseHostedDependency(name, version)
+			if dep != nil {
+				dependencies = append(dependencies, *dep)
+			}
 			continue
 		}
 
@@ -65,13 +69,17 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 	// Parse dev dependencies
 	for name, versionInterface := range pubspec.DevDependencies {
 		version := parseVersionFromInterface(versionInterface)
-		// Skip SDK dependencies, empty versions, 'any' versions, path, git, and hosted packages from private registries
+		// Skip SDK dependencies, empty versions, 'any' versions, path, git dependencies
 		if version == "" || version == "any" || strings.HasPrefix(version, "sdk:") || strings.HasPrefix(version, "path:") || strings.HasPrefix(version, "git:") {
 			continue
 		}
 
-		// Skip hosted packages from private registries (not pub.dev)
+		// Handle hosted packages
 		if strings.HasPrefix(version, "hosted:") {
+			dep := parseHostedDependency(name, version)
+			if dep != nil {
+				dependencies = append(dependencies, *dep)
+			}
 			continue
 		}
 
@@ -83,6 +91,43 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 	}
 
 	return dependencies, nil
+}
+
+// parseHostedDependency parses a hosted dependency string and creates a Dependency
+func parseHostedDependency(name, hostedVersion string) *shared.Dependency {
+	// hostedVersion format: "hosted:URL|VERSION" or "hosted:complex_data"
+	if !strings.HasPrefix(hostedVersion, "hosted:") {
+		return nil
+	}
+
+	withoutPrefix := strings.TrimPrefix(hostedVersion, "hosted:")
+	parts := strings.SplitN(withoutPrefix, "|", 2)
+
+	if len(parts) == 2 {
+		// Format: "hosted:URL|VERSION"
+		hostedURL := parts[0]
+		version := parts[1]
+
+		return &shared.Dependency{
+			Name:            name,
+			Version:         shared.CleanVersion(version),
+			OriginalVersion: version,
+			HostedURL:       hostedURL,
+		}
+	} else if len(parts) == 1 {
+		// Format: "hosted:URL" (version might be missing)
+		hostedURL := parts[0]
+
+		return &shared.Dependency{
+			Name:            name,
+			Version:         "",
+			OriginalVersion: "",
+			HostedURL:       hostedURL,
+		}
+	}
+
+	// For other hosted formats, we don't currently support version extraction
+	return nil
 }
 
 // parseVersionFromInterface extracts version string from interface{}
@@ -98,17 +143,17 @@ func parseVersionFromInterface(versionInterface interface{}) string {
 		}
 		// Handle hosted packages
 		if hosted, ok := v["hosted"]; ok {
-			// For hosted packages, we need to check if they're from pub.dev or private registries
+			// For hosted packages, extract the registry URL and version
 			hostedURL := fmt.Sprintf("%v", hosted)
 
-			// If it's a private registry (not pub.dev), skip it
-			if hostedURL != "" && !strings.Contains(hostedURL, "pub.dev") {
-				return fmt.Sprintf("hosted:%v", hosted)
-			}
-
-			// For pub.dev hosted packages, extract the version
+			// Extract the version
 			if version, hasVersion := v["version"]; hasVersion {
-				return fmt.Sprintf("%v", version)
+				versionStr := fmt.Sprintf("%v", version)
+				// Include hosted URL information for processing
+				if hostedURL != "" && !strings.Contains(hostedURL, "pub.dev") {
+					return fmt.Sprintf("hosted:%s|%s", hostedURL, versionStr)
+				}
+				return versionStr
 			}
 			return fmt.Sprintf("hosted:%v", hosted)
 		}

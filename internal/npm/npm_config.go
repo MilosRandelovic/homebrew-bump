@@ -7,18 +7,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
-// NpmrcConfig holds the parsed .npmrc configuration
-type NpmrcConfig struct {
+// NpmConfig holds the parsed .npmrc configuration
+type NpmConfig struct {
 	ScopeRegistries map[string]string // maps scope to registry URL
 	AuthTokens      map[string]string // maps registry to auth token
 }
 
 // parseNpmrcFiles parses both local and global .npmrc files and merges their configurations
 // Local .npmrc takes precedence for scope registries, global .npmrc provides auth tokens
-func parseNpmrcFiles(localPath string) (*NpmrcConfig, error) {
-	config := &NpmrcConfig{
+func parseNpmrcFiles(localPath string) (*NpmConfig, error) {
+	config := &NpmConfig{
 		ScopeRegistries: make(map[string]string),
 		AuthTokens:      make(map[string]string),
 	}
@@ -52,8 +54,8 @@ func parseNpmrcFiles(localPath string) (*NpmrcConfig, error) {
 	return config, nil
 }
 
-func parseNpmrcFile(filePath string) (*NpmrcConfig, error) {
-	config := &NpmrcConfig{
+func parseNpmrcFile(filePath string) (*NpmConfig, error) {
+	config := &NpmConfig{
 		ScopeRegistries: make(map[string]string),
 		AuthTokens:      make(map[string]string),
 	}
@@ -118,7 +120,7 @@ func parseNpmrcFile(filePath string) (*NpmrcConfig, error) {
 }
 
 // getRegistryForPackage determines the appropriate registry URL for a package
-func getRegistryForPackage(packageName string, npmrcConfig *NpmrcConfig) string {
+func getRegistryForPackage(packageName string, npmrcConfig *NpmConfig) string {
 	// Check if it's a scoped package
 	if strings.HasPrefix(packageName, "@") {
 		if idx := strings.Index(packageName[1:], "/"); idx != -1 {
@@ -134,15 +136,12 @@ func getRegistryForPackage(packageName string, npmrcConfig *NpmrcConfig) string 
 }
 
 // getAuthTokenForRegistry finds the appropriate auth token for a registry URL
-func getAuthTokenForRegistry(registryURL string, npmrcConfig *NpmrcConfig) string {
+func getAuthTokenForRegistry(registryURL string, npmrcConfig *NpmConfig) string {
 	// Extract hostname from registry URL for matching
-	if after, ok := strings.CutPrefix(registryURL, "https://"); ok {
-		hostname := after
-		hostname = strings.TrimSuffix(hostname, "/")
+	hostname := shared.ExtractHostname(registryURL)
 
-		if token, exists := npmrcConfig.AuthTokens[hostname]; exists {
-			return token
-		}
+	if token, exists := npmrcConfig.AuthTokens[hostname]; exists {
+		return token
 	}
 
 	return ""
