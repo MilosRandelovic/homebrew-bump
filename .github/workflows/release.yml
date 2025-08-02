@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Prevent circular triggers when the bot commits formula updates
+    if: github.actor != 'github-actions[bot]'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Extract version from main.go
+      id: version
+      run: |
+        VERSION=$(grep 'const version = ' main.go | sed 's/const version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Configure git
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Validate version
+      run: |
+        # Check if git tag already exists
+        # (i.e. check if the version in main.go has not been bumped)
+        if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+          echo "❌ Error: Git tag ${{ steps.version.outputs.tag }} already exists!"
+          echo "Please update the version in main.go before publishing."
+          exit 1
+        fi
+
+    - name: Get previous tag for release notes
+      id: previous_tag
+      run: |
+        git fetch --tags --prune-tags
+        PREVIOUS_TAG=$(git tag -l --sort=-version:refname | head -n1 || echo "")
+        echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+
+    - name: Create and push tag
+      run: |
+        git tag "${{ steps.version.outputs.tag }}"
+        git push origin "${{ steps.version.outputs.tag }}"
+
+    - name: Create release assets
+      run: |
+        # Create tar.gz of the repository
+        tar -czf "release-${{ steps.version.outputs.version }}.tar.gz" \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='*.tar.gz' \
+          . || true
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
+
+        if [ -n "$PREVIOUS_TAG" ]; then
+          NOTES=$(git log --no-merges --pretty=format:"- %s %h" ${PREVIOUS_TAG}..HEAD)
+        else
+          NOTES=$(git log --no-merges --pretty=format:"- %s %h" -10)
+        fi
+
+        echo "notes<<EOF" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "$NOTES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: Release ${{ steps.version.outputs.tag }}
+        body: ${{ steps.release_notes.outputs.notes }}
+        files: |
+          release-${{ steps.version.outputs.version }}.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update Homebrew Formula
+      run: |
+        # Calculate SHA256 of the release tarball
+        SHA256=$(sha256sum "release-${{ steps.version.outputs.version }}.tar.gz" | cut -d' ' -f1)
+
+        # Update the formula file
+        sed -i "s|url \".*\"|url \"https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz\"|" Formula/bump.rb
+        sed -i "s|sha256 \".*\"|sha256 \"$SHA256\"|" Formula/bump.rb
+
+        echo "Updated Formula/bump.rb:"
+        echo "- URL: https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz"
+        echo "- SHA256: $SHA256"
+
+    - name: Commit and push formula update
+      run: |
+        git add Formula/bump.rb
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
+          git push origin main
+        fi

@@ -1,0 +1,135 @@
+package parser
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestParsePackageJSON(t *testing.T) {
+	// Create a temporary package.json file
+	tempDir := t.TempDir()
+	packageJSONPath := filepath.Join(tempDir, "package.json")
+	
+	packageJSONContent := `{
+		"dependencies": {
+			"react": "^18.0.0",
+			"lodash": "~4.17.20"
+		},
+		"devDependencies": {
+			"typescript": ">=4.9.0"
+		}
+	}`
+	
+	err := os.WriteFile(packageJSONPath, []byte(packageJSONContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	
+	dependencies, err := ParseDependencies(packageJSONPath, "npm")
+	if err != nil {
+		t.Fatalf("Failed to parse package.json: %v", err)
+	}
+	
+	if len(dependencies) != 3 {
+		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
+	}
+	
+	// Check specific dependencies
+	depMap := make(map[string]string)
+	for _, dep := range dependencies {
+		depMap[dep.Name] = dep.Version
+	}
+	
+	if depMap["react"] != "^18.0.0" {
+		t.Errorf("Expected react version '^18.0.0', got '%s'", depMap["react"])
+	}
+	
+	if depMap["lodash"] != "~4.17.20" {
+		t.Errorf("Expected lodash version '~4.17.20', got '%s'", depMap["lodash"])
+	}
+	
+	if depMap["typescript"] != ">=4.9.0" {
+		t.Errorf("Expected typescript version '>=4.9.0', got '%s'", depMap["typescript"])
+	}
+}
+
+func TestParsePubspecYAML(t *testing.T) {
+	// Create a temporary pubspec.yaml file
+	tempDir := t.TempDir()
+	pubspecPath := filepath.Join(tempDir, "pubspec.yaml")
+	
+	pubspecContent := `name: test_app
+version: 1.0.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^0.13.0
+  shared_preferences: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mockito: ^5.3.0
+`
+	
+	err := os.WriteFile(pubspecPath, []byte(pubspecContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	
+	dependencies, err := ParseDependencies(pubspecPath, "dart")
+	if err != nil {
+		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
+	}
+	
+	// Should have 4 dependencies (http, shared_preferences, flutter_test as complex, mockito)
+	// flutter SDK dependency is skipped, but flutter_test SDK is included as complex
+	if len(dependencies) != 4 {
+		t.Errorf("Expected 4 dependencies, got %d", len(dependencies))
+		for i, dep := range dependencies {
+			t.Logf("  %d: %s = %s", i, dep.Name, dep.Version)
+		}
+	}
+	
+	// Check specific dependencies
+	depMap := make(map[string]string)
+	for _, dep := range dependencies {
+		depMap[dep.Name] = dep.Version
+	}
+	
+	if depMap["http"] != "^0.13.0" {
+		t.Errorf("Expected http version '^0.13.0', got '%s'", depMap["http"])
+	}
+	
+	if depMap["shared_preferences"] != "^2.0.0" {
+		t.Errorf("Expected shared_preferences version '^2.0.0', got '%s'", depMap["shared_preferences"])
+	}
+	
+	if depMap["mockito"] != "^5.3.0" {
+		t.Errorf("Expected mockito version '^5.3.0', got '%s'", depMap["mockito"])
+	}
+}
+
+func TestParseVersionFromInterface(t *testing.T) {
+	tests := []struct {
+		input    interface{}
+		expected string
+	}{
+		{"^1.0.0", "^1.0.0"},
+		{"~2.3.4", "~2.3.4"},
+		{map[string]interface{}{"path": "../local_package"}, "path:../local_package"},
+		{map[string]interface{}{"git": "https://github.com/user/repo.git"}, "git:https://github.com/user/repo.git"},
+		{map[string]interface{}{"hosted": "https://custom.pub.dev"}, "hosted:https://custom.pub.dev"},
+		{map[string]interface{}{"unknown": "value"}, "complex"},
+		{123, ""},
+	}
+	
+	for _, test := range tests {
+		result := parseVersionFromInterface(test.input)
+		if result != test.expected {
+			t.Errorf("parseVersionFromInterface(%v) = %s, expected %s", test.input, result, test.expected)
+		}
+	}
+}

@@ -1,0 +1,11 @@
+# Build output
+bump
+
+# Test binary, built with `go test -c`
+*.test
+
+# Go workspace file
+go.work
+
+# OS files
+.DS_Store
