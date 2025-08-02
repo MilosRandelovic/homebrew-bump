@@ -34,8 +34,7 @@ func parsePubConfig() (*PubConfig, error) {
 
 	// Try to parse from pub-tokens.json (dart pub token add)
 	if err := parsePubTokensConfig(config); err != nil {
-		// Log warning but don't fail - this is optional
-		// In a real implementation, you might want to log this
+		// Silently ignore errors - pub-tokens.json is optional
 	}
 
 	return config, nil
