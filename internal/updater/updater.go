@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/MilosRandelovic/homebrew-bump/internal/dart"
 	"github.com/MilosRandelovic/homebrew-bump/internal/npm"
+	"github.com/MilosRandelovic/homebrew-bump/internal/pub"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
@@ -122,8 +122,8 @@ func getRegistryClient(fileType string) (shared.RegistryClient, error) {
 	switch fileType {
 	case "npm":
 		return npm.NewRegistryClient(), nil
-	case "dart":
-		return dart.NewRegistryClient(), nil
+	case "pub":
+		return pub.NewRegistryClient(), nil
 	default:
 		return nil, fmt.Errorf("unsupported file type: %s", fileType)
 	}
@@ -134,8 +134,8 @@ func getUpdater(fileType string) (shared.Updater, error) {
 	switch fileType {
 	case "npm":
 		return npm.NewUpdater(), nil
-	case "dart":
-		return dart.NewUpdater(), nil
+	case "pub":
+		return pub.NewUpdater(), nil
 	default:
 		return nil, fmt.Errorf("unsupported file type: %s", fileType)
 	}

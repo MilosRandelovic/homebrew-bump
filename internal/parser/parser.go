@@ -3,8 +3,8 @@ package parser
 import (
 	"fmt"
 
-	"github.com/MilosRandelovic/homebrew-bump/internal/dart"
 	"github.com/MilosRandelovic/homebrew-bump/internal/npm"
+	"github.com/MilosRandelovic/homebrew-bump/internal/pub"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
@@ -22,8 +22,8 @@ func getParser(fileType string) (shared.Parser, error) {
 	switch fileType {
 	case "npm":
 		return npm.NewParser(), nil
-	case "dart":
-		return dart.NewParser(), nil
+	case "pub":
+		return pub.NewParser(), nil
 	default:
 		return nil, fmt.Errorf("unsupported file type: %s", fileType)
 	}

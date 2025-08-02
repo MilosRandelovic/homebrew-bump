@@ -1,4 +1,4 @@
-package dart
+package pub
 
 import (
 	"encoding/json"
@@ -108,7 +108,7 @@ func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL s
 
 // GetFileType returns the file type this registry client handles
 func (c *RegistryClient) GetFileType() string {
-	return "dart"
+	return "pub"
 }
 
 // Ensure RegistryClient implements the interface

@@ -1,4 +1,4 @@
-package dart
+package pub
 
 import (
 	"fmt"
@@ -172,7 +172,7 @@ func parseVersionFromInterface(versionInterface interface{}) string {
 
 // GetFileType returns the file type this parser handles
 func (p *Parser) GetFileType() string {
-	return "dart"
+	return "pub"
 }
 
 // Ensure Parser implements the interface

@@ -1,4 +1,4 @@
-package dart
+package pub
 
 import (
 	"os"
@@ -178,18 +178,18 @@ dev_dependencies:
 
 func TestGetFileType(t *testing.T) {
 	parser := NewParser()
-	if parser.GetFileType() != "dart" {
-		t.Errorf("Expected file type 'dart', got '%s'", parser.GetFileType())
+	if parser.GetFileType() != "pub" {
+		t.Errorf("Expected file type 'pub', got '%s'", parser.GetFileType())
 	}
 
 	updater := NewUpdater()
-	if updater.GetFileType() != "dart" {
-		t.Errorf("Expected file type 'dart', got '%s'", updater.GetFileType())
+	if updater.GetFileType() != "pub" {
+		t.Errorf("Expected file type 'pub', got '%s'", updater.GetFileType())
 	}
 
 	registry := NewRegistryClient()
-	if registry.GetFileType() != "dart" {
-		t.Errorf("Expected file type 'dart', got '%s'", registry.GetFileType())
+	if registry.GetFileType() != "pub" {
+		t.Errorf("Expected file type 'pub', got '%s'", registry.GetFileType())
 	}
 }
 

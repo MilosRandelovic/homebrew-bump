@@ -1,4 +1,4 @@
-package dart
+package pub
 
 import (
 	"fmt"
@@ -87,7 +87,7 @@ func (u *Updater) UpdateDependencies(filePath string, outdated []shared.Outdated
 
 // GetFileType returns the file type this updater handles
 func (u *Updater) GetFileType() string {
-	return "dart"
+	return "pub"
 }
 
 // Ensure Updater implements the interface

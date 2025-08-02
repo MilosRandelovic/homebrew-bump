@@ -241,7 +241,7 @@ func autoDetectDependencyFile() (string, string, error) {
 	// Check for pubspec.yaml
 	pubspecYaml := filepath.Join(cwd, "pubspec.yaml")
 	if _, err := os.Stat(pubspecYaml); err == nil {
-		return pubspecYaml, "dart", nil
+		return pubspecYaml, "pub", nil
 	}
 
 	return "", "", fmt.Errorf("no package.json or pubspec.yaml found in current directory")

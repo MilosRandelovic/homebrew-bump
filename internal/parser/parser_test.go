@@ -97,7 +97,7 @@ dev_dependencies:
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	dependencies, err := ParseDependencies(pubspecPath, "dart")
+	dependencies, err := ParseDependencies(pubspecPath, "pub")
 	if err != nil {
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
