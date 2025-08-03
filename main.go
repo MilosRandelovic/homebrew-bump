@@ -164,16 +164,16 @@ func main() {
 	}
 
 	// Display results with colors and proper formatting
-	for _, dep := range outdated {
-		change := getSemverChange(dep.CurrentVersion, dep.LatestVersion)
+	for _, dependency := range outdated {
+		change := getSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
 		color := getChangeColor(change)
 
 		// Use the original version from the dependency struct
-		currentVersion := dep.OriginalVersion
-		latestVersion := strings.Replace(currentVersion, dep.CurrentVersion, dep.LatestVersion, 1)
+		currentVersion := dependency.OriginalVersion
+		latestVersion := strings.Replace(currentVersion, dependency.CurrentVersion, dependency.LatestVersion, 1)
 
 		fmt.Printf("%s%-30s%s  %15s  →  %s%15s%s\n",
-			ColorCyan, dep.Name, ColorReset,
+			ColorCyan, dependency.Name, ColorReset,
 			currentVersion,
 			color, latestVersion, ColorReset)
 	}
@@ -198,8 +198,8 @@ func main() {
 	if len(errors) > 0 {
 		if *verbose {
 			fmt.Printf("\nErrors encountered:\n")
-			for _, depErr := range errors {
-				fmt.Printf("  %s%s%s: %s\n", ColorCyan, depErr.Name, ColorReset, depErr.Error)
+			for _, dependencyError := range errors {
+				fmt.Printf("  %s%s%s: %s\n", ColorCyan, dependencyError.Name, ColorReset, dependencyError.Error)
 			}
 		} else {
 			fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
@@ -227,19 +227,19 @@ func main() {
 
 // autoDetectDependencyFile looks for package.json or pubspec.yaml in the current directory
 func autoDetectDependencyFile() (string, string, error) {
-	cwd, err := os.Getwd()
+	currentWorkingDir, err := os.Getwd()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	// Check for package.json first
-	packageJson := filepath.Join(cwd, "package.json")
+	packageJson := filepath.Join(currentWorkingDir, "package.json")
 	if _, err := os.Stat(packageJson); err == nil {
 		return packageJson, "npm", nil
 	}
 
 	// Check for pubspec.yaml
-	pubspecYaml := filepath.Join(cwd, "pubspec.yaml")
+	pubspecYaml := filepath.Join(currentWorkingDir, "pubspec.yaml")
 	if _, err := os.Stat(pubspecYaml); err == nil {
 		return pubspecYaml, "pub", nil
 	}
@@ -250,11 +250,11 @@ func autoDetectDependencyFile() (string, string, error) {
 // parseVersion extracts major, minor, patch from a version string
 func parseVersion(version string) (int, int, int, error) {
 	// Remove prefix characters like ^, ~, >=, etc.
-	re := regexp.MustCompile(`^[\^~>=<]+`)
-	cleanVer := re.ReplaceAllString(version, "")
+	prefixRegex := regexp.MustCompile(`^[\^~>=<]+`)
+	cleanedVersion := prefixRegex.ReplaceAllString(version, "")
 
 	// Split by dots
-	parts := strings.Split(cleanVer, ".")
+	parts := strings.Split(cleanedVersion, ".")
 	if len(parts) < 3 {
 		return 0, 0, 0, fmt.Errorf("invalid version format: %s", version)
 	}
@@ -279,18 +279,18 @@ func parseVersion(version string) (int, int, int, error) {
 
 // getSemverChange determines the type of version change
 func getSemverChange(currentVer, latestVer string) SemverChange {
-	currMajor, currMinor, currPatch, err1 := parseVersion(currentVer)
+	currentMajor, currentMinor, currentPatch, err1 := parseVersion(currentVer)
 	latestMajor, latestMinor, latestPatch, err2 := parseVersion(latestVer)
 
 	if err1 != nil || err2 != nil {
 		return PatchChange // Default to patch if we can't parse
 	}
 
-	if latestMajor > currMajor {
+	if latestMajor > currentMajor {
 		return MajorChange
-	} else if latestMinor > currMinor {
+	} else if latestMinor > currentMinor {
 		return MinorChange
-	} else if latestPatch > currPatch {
+	} else if latestPatch > currentPatch {
 		return PatchChange
 	}
 

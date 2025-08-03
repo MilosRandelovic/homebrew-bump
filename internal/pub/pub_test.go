@@ -48,8 +48,8 @@ dev_dependencies:
 	// Should include: http, path, pubdev_hosted, private_package, test = 5 dependencies
 	if len(dependencies) != 5 {
 		t.Errorf("Expected 5 dependencies, got %d", len(dependencies))
-		for _, dep := range dependencies {
-			t.Logf("Found dependency: %s - %s (hosted: %s)", dep.Name, dep.OriginalVersion, dep.HostedURL)
+		for _, dependency := range dependencies {
+			t.Logf("Found dependency: %s - %s (hosted: %s)", dependency.Name, dependency.OriginalVersion, dependency.HostedURL)
 		}
 	}
 
@@ -57,10 +57,10 @@ dev_dependencies:
 	cleanVersionMap := make(map[string]string)
 	originalVersionMap := make(map[string]string)
 	hostedURLMap := make(map[string]string)
-	for _, dep := range dependencies {
-		cleanVersionMap[dep.Name] = dep.Version
-		originalVersionMap[dep.Name] = dep.OriginalVersion
-		hostedURLMap[dep.Name] = dep.HostedURL
+	for _, dependency := range dependencies {
+		cleanVersionMap[dependency.Name] = dependency.Version
+		originalVersionMap[dependency.Name] = dependency.OriginalVersion
+		hostedURLMap[dependency.Name] = dependency.HostedURL
 	}
 
 	// Check clean versions (without prefixes)
@@ -246,51 +246,51 @@ dependencies:
 	expectedDeps := []string{"http", "pubdev_hosted", "private_pkg"}
 	if len(dependencies) != len(expectedDeps) {
 		t.Errorf("Expected %d dependencies, got %d", len(expectedDeps), len(dependencies))
-		for _, dep := range dependencies {
-			t.Logf("Found dependency: %s - %s (hosted: %s)", dep.Name, dep.OriginalVersion, dep.HostedURL)
+		for _, dependency := range dependencies {
+			t.Logf("Found dependency: %s - %s (hosted: %s)", dependency.Name, dependency.OriginalVersion, dependency.HostedURL)
 		}
 	}
 
 	// Create map for easier testing
-	depMap := make(map[string]shared.Dependency)
-	for _, dep := range dependencies {
-		depMap[dep.Name] = dep
+	dependencyMap := make(map[string]shared.Dependency)
+	for _, dependency := range dependencies {
+		dependencyMap[dependency.Name] = dependency
 	}
 
 	// Verify each expected dependency
 	for _, expectedName := range expectedDeps {
-		if _, exists := depMap[expectedName]; !exists {
+		if _, exists := dependencyMap[expectedName]; !exists {
 			t.Errorf("Expected dependency '%s' not found", expectedName)
 		}
 	}
 
 	// Check specific version handling for pubdev_hosted
-	if dep, exists := depMap["pubdev_hosted"]; exists {
-		if dep.OriginalVersion != "^1.0.0" {
-			t.Errorf("Expected pubdev_hosted original version '^1.0.0', got '%s'", dep.OriginalVersion)
+	if dependency, exists := dependencyMap["pubdev_hosted"]; exists {
+		if dependency.OriginalVersion != "^1.0.0" {
+			t.Errorf("Expected pubdev_hosted original version '^1.0.0', got '%s'", dependency.OriginalVersion)
 		}
-		if dep.Version != "1.0.0" {
-			t.Errorf("Expected pubdev_hosted cleaned version '1.0.0', got '%s'", dep.Version)
+		if dependency.Version != "1.0.0" {
+			t.Errorf("Expected pubdev_hosted cleaned version '1.0.0', got '%s'", dependency.Version)
 		}
-		if dep.HostedURL != "" {
-			t.Errorf("Expected pubdev_hosted to have empty hosted URL, got '%s'", dep.HostedURL)
+		if dependency.HostedURL != "" {
+			t.Errorf("Expected pubdev_hosted to have empty hosted URL, got '%s'", dependency.HostedURL)
 		}
 	}
 
 	// Check private hosted package
-	if dep, exists := depMap["private_pkg"]; exists {
-		if dep.OriginalVersion != "1.0.0" {
-			t.Errorf("Expected private_pkg original version '1.0.0', got '%s'", dep.OriginalVersion)
+	if dependency, exists := dependencyMap["private_pkg"]; exists {
+		if dependency.OriginalVersion != "1.0.0" {
+			t.Errorf("Expected private_pkg original version '1.0.0', got '%s'", dependency.OriginalVersion)
 		}
-		if dep.HostedURL != "https://private-registry.example.com" {
-			t.Errorf("Expected private_pkg hosted URL 'https://private-registry.example.com', got '%s'", dep.HostedURL)
+		if dependency.HostedURL != "https://private-registry.example.com" {
+			t.Errorf("Expected private_pkg hosted URL 'https://private-registry.example.com', got '%s'", dependency.HostedURL)
 		}
 	}
 
 	// Verify excluded dependencies (including 'any' versions)
 	excludedDeps := []string{"flutter", "flutter_localizations", "git_pkg", "local_pkg", "intl"}
 	for _, excludedName := range excludedDeps {
-		if _, exists := depMap[excludedName]; exists {
+		if _, exists := dependencyMap[excludedName]; exists {
 			t.Errorf("Dependency '%s' should have been excluded but was found", excludedName)
 		}
 	}
@@ -441,9 +441,9 @@ custom_config:
 		"flutter_lints: ^2.0.0",
 	}
 
-	for _, dep := range unchangedDeps {
-		if !strings.Contains(updatedStr, dep) {
-			t.Errorf("Unchanged dependency missing: %s", dep)
+	for _, dependency := range unchangedDeps {
+		if !strings.Contains(updatedStr, dependency) {
+			t.Errorf("Unchanged dependency missing: %s", dependency)
 		}
 	}
 }

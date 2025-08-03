@@ -10,8 +10,8 @@ import (
 
 // CleanVersion removes prefix characters (^, ~, >=, etc.) from version strings
 func CleanVersion(version string) string {
-	re := regexp.MustCompile(`^[\^~>=<]+`)
-	return re.ReplaceAllString(version, "")
+	prefixRegex := regexp.MustCompile(`^[\^~>=<]+`)
+	return prefixRegex.ReplaceAllString(version, "")
 }
 
 // HasSemanticPrefix checks if a version string has a semantic versioning prefix like ^, ~, >=
@@ -23,8 +23,8 @@ func HasSemanticPrefix(version string) bool {
 
 // GetVersionPrefix extracts the version prefix (^, ~, >=, etc.) from a version string
 func GetVersionPrefix(version string) string {
-	re := regexp.MustCompile(`^([\^~>=<]+)`)
-	matches := re.FindStringSubmatch(version)
+	prefixRegex := regexp.MustCompile(`^([\^~>=<]+)`)
+	matches := prefixRegex.FindStringSubmatch(version)
 	if len(matches) > 1 {
 		return matches[1]
 	}
@@ -201,7 +201,9 @@ func FindBothLatestVersions(versions []string, constraint string) (string, strin
 	}
 
 	return absoluteLatest, constraintLatest, nil
-} // compareSemanticVersions compares two semantic versions
+}
+
+// compareSemanticVersions compares two semantic versions
 // Returns: -1 if a < b, 0 if a == b, 1 if a > b
 func compareSemanticVersions(a, b *SemanticVersion) int {
 	if a.Major != b.Major {

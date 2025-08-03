@@ -24,7 +24,7 @@ func NewParser() *Parser {
 }
 
 // ParseDependencies parses a pubspec.yaml file and extracts dependencies
-func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error) {
+func (parser *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -52,9 +52,9 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 
 		// Handle hosted packages
 		if strings.HasPrefix(version, "hosted:") {
-			dep := parseHostedDependency(name, version)
-			if dep != nil {
-				dependencies = append(dependencies, *dep)
+			dependency := parseHostedDependency(name, version)
+			if dependency != nil {
+				dependencies = append(dependencies, *dependency)
 			}
 			continue
 		}
@@ -76,9 +76,9 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 
 		// Handle hosted packages
 		if strings.HasPrefix(version, "hosted:") {
-			dep := parseHostedDependency(name, version)
-			if dep != nil {
-				dependencies = append(dependencies, *dep)
+			dependency := parseHostedDependency(name, version)
+			if dependency != nil {
+				dependencies = append(dependencies, *dependency)
 			}
 			continue
 		}
@@ -133,21 +133,21 @@ func parseHostedDependency(name, hostedVersion string) *shared.Dependency {
 // parseVersionFromInterface extracts version string from interface{}
 // Handles both string versions ("^1.0.0") and map versions (git dependencies, etc.)
 func parseVersionFromInterface(versionInterface interface{}) string {
-	switch v := versionInterface.(type) {
+	switch versionValue := versionInterface.(type) {
 	case string:
-		return v
+		return versionValue
 	case map[string]any:
 		// Skip SDK dependencies
-		if sdk, ok := v["sdk"]; ok {
+		if sdk, ok := versionValue["sdk"]; ok {
 			return fmt.Sprintf("sdk:%v", sdk)
 		}
 		// Handle hosted packages
-		if hosted, ok := v["hosted"]; ok {
+		if hosted, ok := versionValue["hosted"]; ok {
 			// For hosted packages, extract the registry URL and version
 			hostedURL := fmt.Sprintf("%v", hosted)
 
 			// Extract the version
-			if version, hasVersion := v["version"]; hasVersion {
+			if version, hasVersion := versionValue["version"]; hasVersion {
 				versionStr := fmt.Sprintf("%v", version)
 				// Include hosted URL information for processing
 				if hostedURL != "" && !strings.Contains(hostedURL, "pub.dev") {
@@ -158,10 +158,10 @@ func parseVersionFromInterface(versionInterface interface{}) string {
 			return fmt.Sprintf("hosted:%v", hosted)
 		}
 		// Handle git dependencies or other complex version specifications
-		if path, ok := v["path"]; ok {
+		if path, ok := versionValue["path"]; ok {
 			return fmt.Sprintf("path:%v", path)
 		}
-		if git, ok := v["git"]; ok {
+		if git, ok := versionValue["git"]; ok {
 			return fmt.Sprintf("git:%v", git)
 		}
 		return "complex"
@@ -171,7 +171,7 @@ func parseVersionFromInterface(versionInterface interface{}) string {
 }
 
 // GetFileType returns the file type this parser handles
-func (p *Parser) GetFileType() string {
+func (parser *Parser) GetFileType() string {
 	return "pub"
 }
 

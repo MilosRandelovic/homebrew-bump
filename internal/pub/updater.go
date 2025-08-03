@@ -17,7 +17,7 @@ func NewUpdater() *Updater {
 }
 
 // UpdateDependencies updates dependencies in a pubspec.yaml file using string replacement
-func (u *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool) error {
+func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
@@ -26,54 +26,54 @@ func (u *Updater) UpdateDependencies(filePath string, outdated []shared.Outdated
 	content := string(data)
 
 	// Update each outdated dependency
-	for _, dep := range outdated {
+	for _, dependency := range outdated {
 		var updated bool
 
 		// For hosted packages, look for the version field within the hosted package block
-		if dep.HostedURL != "" {
+		if dependency.HostedURL != "" {
 			// Pattern for hosted packages: look for version field after the package name
-			hostedPattern := fmt.Sprintf(`(\s+%s:\s*\n(?:\s+hosted:[^\n]+\n)?\s+version:\s*)([^\s\n]+)`, regexp.QuoteMeta(dep.Name))
+			hostedPattern := fmt.Sprintf(`(\s+%s:\s*\n(?:\s+hosted:[^\n]+\n)?\s+version:\s*)([^\s\n]+)`, regexp.QuoteMeta(dependency.Name))
 			hostedRe := regexp.MustCompile(hostedPattern)
 
 			matches := hostedRe.FindStringSubmatch(content)
 			if len(matches) >= 3 {
 				currentVersionInFile := matches[2]
 				prefix := shared.GetVersionPrefix(currentVersionInFile)
-				newVersion := prefix + dep.LatestVersion
+				newVersion := prefix + dependency.LatestVersion
 
 				replacement := matches[1] + newVersion
 				content = hostedRe.ReplaceAllString(content, replacement)
 				updated = true
 
 				if verbose {
-					fmt.Printf("Updated %s: %s -> %s\n", dep.Name, currentVersionInFile, newVersion)
+					fmt.Printf("Updated %s: %s -> %s\n", dependency.Name, currentVersionInFile, newVersion)
 				}
 			}
 		}
 
 		// If not updated yet, try the simple pattern for regular dependencies
 		if !updated {
-			oldVersionPattern := fmt.Sprintf(`(\s+%s:\s*)([^\s\n]+)`, regexp.QuoteMeta(dep.Name))
-			re := regexp.MustCompile(oldVersionPattern)
+			oldVersionPattern := fmt.Sprintf(`(\s+%s:\s*)([^\s\n]+)`, regexp.QuoteMeta(dependency.Name))
+			versionRegex := regexp.MustCompile(oldVersionPattern)
 
-			matches := re.FindStringSubmatch(content)
+			matches := versionRegex.FindStringSubmatch(content)
 			if len(matches) >= 3 {
 				currentVersionInFile := matches[2]
 				prefix := shared.GetVersionPrefix(currentVersionInFile)
-				newVersion := prefix + dep.LatestVersion
+				newVersion := prefix + dependency.LatestVersion
 
 				replacement := matches[1] + newVersion
-				content = re.ReplaceAllString(content, replacement)
+				content = versionRegex.ReplaceAllString(content, replacement)
 				updated = true
 
 				if verbose {
-					fmt.Printf("Updated %s: %s -> %s\n", dep.Name, currentVersionInFile, newVersion)
+					fmt.Printf("Updated %s: %s -> %s\n", dependency.Name, currentVersionInFile, newVersion)
 				}
 			}
 		}
 
 		if !updated && verbose {
-			fmt.Printf("Warning: Could not find %s in file for updating\n", dep.Name)
+			fmt.Printf("Warning: Could not find %s in file for updating\n", dependency.Name)
 		}
 	}
 
@@ -86,7 +86,7 @@ func (u *Updater) UpdateDependencies(filePath string, outdated []shared.Outdated
 }
 
 // GetFileType returns the file type this updater handles
-func (u *Updater) GetFileType() string {
+func (updater *Updater) GetFileType() string {
 	return "pub"
 }
 

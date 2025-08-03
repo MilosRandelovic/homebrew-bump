@@ -17,7 +17,7 @@ func NewUpdater() *Updater {
 }
 
 // UpdateDependencies updates dependencies in a package.json file
-func (u *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool) error {
+func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
@@ -27,30 +27,30 @@ func (u *Updater) UpdateDependencies(filePath string, outdated []shared.Outdated
 	content := string(data)
 
 	// Update each outdated dependency using regex
-	for _, dep := range outdated {
+	for _, dependency := range outdated {
 		// Escape special regex characters in package name
-		escapedName := regexp.QuoteMeta(dep.Name)
+		escapedName := regexp.QuoteMeta(dependency.Name)
 
 		// Pattern to match the dependency line: "package-name": "version"
 		pattern := fmt.Sprintf(`"%s"\s*:\s*"([^"]*)"`, escapedName)
-		re := regexp.MustCompile(pattern)
+		versionRegex := regexp.MustCompile(pattern)
 
 		// Find and replace
-		matches := re.FindStringSubmatch(content)
+		matches := versionRegex.FindStringSubmatch(content)
 		if len(matches) > 1 {
 			oldVersion := matches[1]
 			prefix := shared.GetVersionPrefix(oldVersion)
-			newVersion := prefix + dep.LatestVersion
+			newVersion := prefix + dependency.LatestVersion
 
 			// Replace the version while keeping the same structure
-			replacement := fmt.Sprintf(`"%s": "%s"`, dep.Name, newVersion)
-			content = re.ReplaceAllString(content, replacement)
+			replacement := fmt.Sprintf(`"%s": "%s"`, dependency.Name, newVersion)
+			content = versionRegex.ReplaceAllString(content, replacement)
 
 			if verbose {
-				fmt.Printf("Updated %s: %s -> %s\n", dep.Name, oldVersion, newVersion)
+				fmt.Printf("Updated %s: %s -> %s\n", dependency.Name, oldVersion, newVersion)
 			}
 		} else if verbose {
-			fmt.Printf("Warning: Could not find %s in file for updating\n", dep.Name)
+			fmt.Printf("Warning: Could not find %s in file for updating\n", dependency.Name)
 		}
 	}
 
@@ -63,7 +63,7 @@ func (u *Updater) UpdateDependencies(filePath string, outdated []shared.Outdated
 }
 
 // GetFileType returns the file type this updater handles
-func (u *Updater) GetFileType() string {
+func (updater *Updater) GetFileType() string {
 	return "npm"
 }
 

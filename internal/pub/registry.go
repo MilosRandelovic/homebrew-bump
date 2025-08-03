@@ -27,13 +27,13 @@ func NewRegistryClient() *RegistryClient {
 }
 
 // GetLatestVersion fetches the latest version from pub.dev API or private registries
-func (c *RegistryClient) GetLatestVersion(packageName string, verbose bool) (string, error) {
-	return c.GetLatestVersionFromRegistry(packageName, "", verbose)
+func (client *RegistryClient) GetLatestVersion(packageName string, verbose bool) (string, error) {
+	return client.GetLatestVersionFromRegistry(packageName, "", verbose)
 }
 
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
-func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
-	body, err := c.fetchPackageInfo(packageName, registryURL, verbose)
+func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
+	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
 	if err != nil {
 		return "", err
 	}
@@ -47,8 +47,8 @@ func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL s
 }
 
 // GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
-func (c *RegistryClient) GetBothLatestVersions(packageName, constraint string, verbose bool) (string, string, error) {
-	body, err := c.fetchPackageInfo(packageName, "", verbose)
+func (client *RegistryClient) GetBothLatestVersions(packageName, constraint string, verbose bool) (string, string, error) {
+	body, err := client.fetchPackageInfo(packageName, "", verbose)
 	if err != nil {
 		return "", "", err
 	}
@@ -65,15 +65,15 @@ func (c *RegistryClient) GetBothLatestVersions(packageName, constraint string, v
 
 	// Extract version strings
 	var versions []string
-	for _, v := range packageInfo.Versions {
-		versions = append(versions, v.Version)
+	for _, versionInfo := range packageInfo.Versions {
+		versions = append(versions, versionInfo.Version)
 	}
 
 	return shared.FindBothLatestVersions(versions, constraint)
 }
 
 // fetchPackageInfo is a shared method to fetch package information from registries
-func (c *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbose bool) ([]byte, error) {
+func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbose bool) ([]byte, error) {
 	// Parse pub configuration
 	config, err := parsePubConfig()
 	if err != nil {
@@ -111,31 +111,31 @@ func (c *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbo
 		fmt.Printf("Checking Dart package: %s (registry: %s)\n", packageName, targetRegistry.URL)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Add authentication if available for this registry
 	if targetRegistry.AuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+targetRegistry.AuthToken)
+		request.Header.Set("Authorization", "Bearer "+targetRegistry.AuthToken)
 		if verbose {
 			fmt.Printf("Using authentication for registry: %s\n", targetRegistry.URL)
 		}
 	}
 
-	resp, err := client.Do(req)
+	response, err := httpClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch package info: %w", err)
 	}
-	defer resp.Body.Close()
+	defer response.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("registry returned status %d for %s", resp.StatusCode, packageName)
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("registry returned status %d for %s", response.StatusCode, packageName)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -144,7 +144,7 @@ func (c *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbo
 }
 
 // GetFileType returns the file type this registry client handles
-func (c *RegistryClient) GetFileType() string {
+func (client *RegistryClient) GetFileType() string {
 	return "pub"
 }
 

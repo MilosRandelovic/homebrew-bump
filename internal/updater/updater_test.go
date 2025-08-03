@@ -286,16 +286,16 @@ type MockRegistryClient struct {
 	packageVersions map[string][]string
 }
 
-func (m *MockRegistryClient) GetLatestVersionFromRegistry(packageName string) (string, error) {
-	versions := m.packageVersions[packageName]
+func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName string) (string, error) {
+	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", fmt.Errorf("package not found")
 	}
 	return versions[len(versions)-1], nil
 }
 
-func (m *MockRegistryClient) GetBothLatestVersions(packageName, constraint string) (string, string, error) {
-	versions := m.packageVersions[packageName]
+func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint string) (string, string, error) {
+	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", "", fmt.Errorf("package not found")
 	}

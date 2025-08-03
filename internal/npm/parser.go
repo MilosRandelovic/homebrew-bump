@@ -23,7 +23,7 @@ func NewParser() *Parser {
 }
 
 // ParseDependencies parses a package.json file and extracts dependencies
-func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error) {
+func (parser *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -58,7 +58,7 @@ func (p *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error)
 }
 
 // GetFileType returns the file type this parser handles
-func (p *Parser) GetFileType() string {
+func (parser *Parser) GetFileType() string {
 	return "npm"
 }
 
