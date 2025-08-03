@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/parser"
+	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
 )
 
-const version = "1.0.0"
+const version = "1.0.1"
 
 // Color constants
 const (
@@ -23,15 +22,6 @@ const (
 	ColorYellow = "\033[33m" // Minor version changes
 	ColorGreen  = "\033[32m" // Patch version changes
 	ColorCyan   = "\033[36m" // Package names
-)
-
-// SemverChange represents the type of version change
-type SemverChange int
-
-const (
-	PatchChange SemverChange = iota
-	MinorChange
-	MajorChange
 )
 
 func main() {
@@ -145,6 +135,21 @@ func main() {
 	errors := result.Errors
 	semverSkipped := result.SemverSkipped
 
+	// Sort outdated dependencies alphabetically by name
+	sort.Slice(outdated, func(i, j int) bool {
+		return outdated[i].Name < outdated[j].Name
+	})
+
+	// Sort errors alphabetically by name
+	sort.Slice(errors, func(i, j int) bool {
+		return errors[i].Name < errors[j].Name
+	})
+
+	// Sort semver skipped packages alphabetically by name
+	sort.Slice(semverSkipped, func(i, j int) bool {
+		return semverSkipped[i].Name < semverSkipped[j].Name
+	})
+
 	if len(outdated) == 0 && len(errors) == 0 && (!*semver || len(semverSkipped) == 0) {
 		fmt.Println("\nAll dependencies are up to date!")
 		return
@@ -154,26 +159,21 @@ func main() {
 		fmt.Printf("\n") // Add space after progress bar only in non-verbose mode
 	}
 
-	// Sort outdated dependencies alphabetically by name
-	sort.Slice(outdated, func(i, j int) bool {
-		return outdated[i].Name < outdated[j].Name
-	})
-
 	if *verbose && len(outdated) > 0 {
 		fmt.Printf("\nFound %d outdated dependencies:\n", len(outdated))
 	}
 
 	// Display results with colors and proper formatting
-	for _, dep := range outdated {
-		change := getSemverChange(dep.CurrentVersion, dep.LatestVersion)
+	for _, dependency := range outdated {
+		change := shared.GetSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
 		color := getChangeColor(change)
 
 		// Use the original version from the dependency struct
-		currentVersion := dep.OriginalVersion
-		latestVersion := strings.Replace(currentVersion, dep.CurrentVersion, dep.LatestVersion, 1)
+		currentVersion := dependency.OriginalVersion
+		latestVersion := strings.Replace(currentVersion, dependency.CurrentVersion, dependency.LatestVersion, 1)
 
 		fmt.Printf("%s%-30s%s  %15s  →  %s%15s%s\n",
-			ColorCyan, dep.Name, ColorReset,
+			ColorCyan, dependency.Name, ColorReset,
 			currentVersion,
 			color, latestVersion, ColorReset)
 	}
@@ -198,11 +198,15 @@ func main() {
 	if len(errors) > 0 {
 		if *verbose {
 			fmt.Printf("\nErrors encountered:\n")
-			for _, depErr := range errors {
-				fmt.Printf("  %s%s%s: %s\n", ColorCyan, depErr.Name, ColorReset, depErr.Error)
+			for _, dependencyError := range errors {
+				fmt.Printf("  %s%s%s: %s\n", ColorCyan, dependencyError.Name, ColorReset, dependencyError.Error)
 			}
 		} else {
-			fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
+			if *semver {
+				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -semver -verbose' to see the full output.\n", len(errors))
+			} else {
+				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
+			}
 		}
 	}
 
@@ -220,26 +224,30 @@ func main() {
 		}
 	} else {
 		if len(outdated) > 0 {
-			fmt.Printf("\nRun 'bump -update' to update dependencies to latest versions.\n")
+			if *semver {
+				fmt.Printf("\nRun 'bump -update -semver' to update dependencies while respecting semver constraints.\n")
+			} else {
+				fmt.Printf("\nRun 'bump -update' to update dependencies to latest versions.\n")
+			}
 		}
 	}
 }
 
 // autoDetectDependencyFile looks for package.json or pubspec.yaml in the current directory
 func autoDetectDependencyFile() (string, string, error) {
-	cwd, err := os.Getwd()
+	currentWorkingDir, err := os.Getwd()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	// Check for package.json first
-	packageJson := filepath.Join(cwd, "package.json")
+	packageJson := filepath.Join(currentWorkingDir, "package.json")
 	if _, err := os.Stat(packageJson); err == nil {
 		return packageJson, "npm", nil
 	}
 
 	// Check for pubspec.yaml
-	pubspecYaml := filepath.Join(cwd, "pubspec.yaml")
+	pubspecYaml := filepath.Join(currentWorkingDir, "pubspec.yaml")
 	if _, err := os.Stat(pubspecYaml); err == nil {
 		return pubspecYaml, "pub", nil
 	}
@@ -247,64 +255,14 @@ func autoDetectDependencyFile() (string, string, error) {
 	return "", "", fmt.Errorf("no package.json or pubspec.yaml found in current directory")
 }
 
-// parseVersion extracts major, minor, patch from a version string
-func parseVersion(version string) (int, int, int, error) {
-	// Remove prefix characters like ^, ~, >=, etc.
-	re := regexp.MustCompile(`^[\^~>=<]+`)
-	cleanVer := re.ReplaceAllString(version, "")
-
-	// Split by dots
-	parts := strings.Split(cleanVer, ".")
-	if len(parts) < 3 {
-		return 0, 0, 0, fmt.Errorf("invalid version format: %s", version)
-	}
-
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	minor, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	patch, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	return major, minor, patch, nil
-}
-
-// getSemverChange determines the type of version change
-func getSemverChange(currentVer, latestVer string) SemverChange {
-	currMajor, currMinor, currPatch, err1 := parseVersion(currentVer)
-	latestMajor, latestMinor, latestPatch, err2 := parseVersion(latestVer)
-
-	if err1 != nil || err2 != nil {
-		return PatchChange // Default to patch if we can't parse
-	}
-
-	if latestMajor > currMajor {
-		return MajorChange
-	} else if latestMinor > currMinor {
-		return MinorChange
-	} else if latestPatch > currPatch {
-		return PatchChange
-	}
-
-	return PatchChange
-}
-
 // getChangeColor returns the appropriate color for the version change type
-func getChangeColor(change SemverChange) string {
+func getChangeColor(change shared.SemverChange) string {
 	switch change {
-	case MajorChange:
+	case shared.MajorChange:
 		return ColorRed
-	case MinorChange:
+	case shared.MinorChange:
 		return ColorYellow
-	case PatchChange:
+	case shared.PatchChange:
 		return ColorGreen
 	default:
 		return ColorReset

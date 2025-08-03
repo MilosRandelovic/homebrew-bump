@@ -31,72 +31,108 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 		return nil, err
 	}
 
-	for i, dep := range dependencies {
+	for i, dependency := range dependencies {
 		// Update progress
 		if progressCallback != nil {
 			progressCallback(i+1, total)
 		}
 
 		// Skip complex dependencies (git, path, etc.)
-		if strings.HasPrefix(dep.Version, "git:") || strings.HasPrefix(dep.Version, "path:") || dep.Version == "complex" {
+		if strings.HasPrefix(dependency.Version, "git:") || strings.HasPrefix(dependency.Version, "path:") || dependency.Version == "complex" {
 			if verbose {
-				fmt.Printf("Skipping complex dependency: %s (%s)\n", dep.Name, dep.Version)
+				fmt.Printf("Skipping complex dependency: %s (%s)\n", dependency.Name, dependency.Version)
 			}
 			continue
 		}
 
 		// If semver flag is enabled and it's a hardcoded version (no prefix), skip it
-		if semver && shared.GetVersionPrefix(dep.OriginalVersion) == "" {
+		if semver && shared.GetVersionPrefix(dependency.OriginalVersion) == "" {
 			if verbose {
-				fmt.Printf("Skipping hardcoded version: %s (%s)\n", dep.Name, dep.OriginalVersion)
+				fmt.Printf("Skipping hardcoded version: %s (%s)\n", dependency.Name, dependency.OriginalVersion)
 			}
 			// We don't need to fetch the latest version for hardcoded versions
 			semverSkipped = append(semverSkipped, shared.SemverSkipped{
-				Name:            dep.Name,
-				CurrentVersion:  dep.Version,
+				Name:            dependency.Name,
+				CurrentVersion:  dependency.Version,
 				LatestVersion:   "", // Not fetched
-				OriginalVersion: dep.OriginalVersion,
+				OriginalVersion: dependency.OriginalVersion,
 				Reason:          "hardcoded version",
 			})
 			continue
 		}
 
-		latestVersion, err := registryClient.GetLatestVersionFromRegistry(dep.Name, dep.HostedURL, verbose)
-		if err != nil {
-			errors = append(errors, shared.DependencyError{
-				Name:  dep.Name,
-				Error: err.Error(),
-			})
-			if verbose {
-				fmt.Printf("Error checking %s: %v\n", dep.Name, err)
-			}
-			continue
-		}
+		var latestVersion string
+		var absoluteLatest string
+		var err error
 
-		currentVersion := dep.Version // Already cleaned in parser
-		if currentVersion != latestVersion && latestVersion != "" {
-			// If semver flag is enabled, check if the latest version is compatible
-			if semver && !shared.IsSemverCompatible(dep.OriginalVersion, latestVersion) {
-				if verbose {
-					fmt.Printf("Skipping %s: latest version %s not compatible with constraint %s\n",
-						dep.Name, latestVersion, dep.OriginalVersion)
+		// If semver flag is enabled and we have a prefixed version, get both versions in one call
+		if semver && shared.HasSemanticPrefix(dependency.OriginalVersion) {
+			absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, verbose)
+			if err != nil {
+				// If constraint error, use the absolute latest already returned for semver skipped
+				if strings.Contains(err.Error(), "no versions satisfy the constraint") && absoluteLatest != "" {
+					// Add to semver skipped since constraint is incompatible but package exists
+					semverSkipped = append(semverSkipped, shared.SemverSkipped{
+						Name:            dependency.Name,
+						CurrentVersion:  dependency.Version,
+						LatestVersion:   absoluteLatest,
+						OriginalVersion: dependency.OriginalVersion,
+						Reason:          "incompatible with constraint",
+					})
+					continue
 				}
-				semverSkipped = append(semverSkipped, shared.SemverSkipped{
-					Name:            dep.Name,
-					CurrentVersion:  currentVersion,
-					LatestVersion:   latestVersion,
-					OriginalVersion: dep.OriginalVersion,
-					Reason:          "incompatible with constraint",
+				// If we can't get latest version or it's a different error, treat as error
+				if verbose {
+					fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
+				}
+				errors = append(errors, shared.DependencyError{
+					Name:  dependency.Name,
+					Error: err.Error(),
 				})
 				continue
 			}
+		} else {
+			// Use absolute latest version fetching for non-semver cases
+			latestVersion, err = registryClient.GetLatestVersionFromRegistry(dependency.Name, dependency.HostedURL, verbose)
+			if err != nil {
+				errors = append(errors, shared.DependencyError{
+					Name:  dependency.Name,
+					Error: err.Error(),
+				})
+				if verbose {
+					fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
+				}
+				continue
+			}
+			absoluteLatest = latestVersion // Same as latest when not using semver constraints
+		}
 
+		currentVersion := dependency.Version // Already cleaned in parser
+
+		// Check if there's an update available
+		if currentVersion != latestVersion && latestVersion != "" {
 			outdated = append(outdated, shared.OutdatedDependency{
-				Name:            dep.Name,
+				Name:            dependency.Name,
 				CurrentVersion:  currentVersion,
 				LatestVersion:   latestVersion,
-				OriginalVersion: dep.OriginalVersion,
-				HostedURL:       dep.HostedURL,
+				OriginalVersion: dependency.OriginalVersion,
+				HostedURL:       dependency.HostedURL,
+			})
+		}
+
+		// If semver is enabled and we have both versions, check if there's a newer incompatible version
+		if semver && shared.HasSemanticPrefix(dependency.OriginalVersion) && absoluteLatest != latestVersion {
+			if verbose {
+				fmt.Printf("Note: %s has newer version %s available, but it's incompatible with constraint %s (using %s)\n",
+					dependency.Name, absoluteLatest, dependency.OriginalVersion, latestVersion)
+			}
+			// Add to semverSkipped if the absolute latest is a major version jump
+			semverSkipped = append(semverSkipped, shared.SemverSkipped{
+				Name:            dependency.Name,
+				CurrentVersion:  currentVersion,
+				LatestVersion:   absoluteLatest,
+				OriginalVersion: dependency.OriginalVersion,
+				Reason:          "incompatible with constraint",
 			})
 		}
 	}

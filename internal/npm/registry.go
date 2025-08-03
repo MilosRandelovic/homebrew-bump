@@ -1,6 +1,7 @@
 package npm
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,7 +20,8 @@ type RegistryClient struct{}
 type NpmPackageInfo struct {
 	DistTags map[string]string `json:"dist-tags"`
 	Versions map[string]struct {
-		Version string `json:"version"`
+		Version    string `json:"version"`
+		Deprecated string `json:"deprecated,omitempty"`
 	} `json:"versions"`
 }
 
@@ -28,67 +30,11 @@ func NewRegistryClient() *RegistryClient {
 	return &RegistryClient{}
 }
 
-// GetLatestVersion fetches the latest version from NPM registry
-func (c *RegistryClient) GetLatestVersion(packageName string, verbose bool) (string, error) {
-	return c.GetLatestVersionFromRegistry(packageName, "", verbose)
-}
-
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
-func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
-	// Parse .npmrc configuration from both local and global files
-	cwd, err := os.Getwd()
+func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
+	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
 	if err != nil {
-		return "", fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	npmrcPath := filepath.Join(cwd, ".npmrc")
-	npmrcConfig, err := parseNpmrcFiles(npmrcPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse .npmrc: %w", err)
-	}
-
-	var targetRegistryURL string
-	if registryURL != "" {
-		// Use specified registry
-		targetRegistryURL = registryURL
-	} else {
-		// Get the appropriate registry for this package
-		targetRegistryURL = getRegistryForPackage(packageName, npmrcConfig)
-	}
-
-	url := fmt.Sprintf("%s/%s", targetRegistryURL, packageName)
-
-	if verbose {
-		fmt.Printf("Checking NPM package: %s (registry: %s)\n", packageName, targetRegistryURL)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add authentication if available for this registry
-	if authToken := getAuthTokenForRegistry(targetRegistryURL, npmrcConfig); authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
-		if verbose {
-			fmt.Printf("Using authentication for registry: %s\n", targetRegistryURL)
-		}
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch package info: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("registry returned status %d for %s", resp.StatusCode, packageName)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return "", err
 	}
 
 	var packageInfo NpmPackageInfo
@@ -103,8 +49,91 @@ func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL s
 	return "", fmt.Errorf("no latest version found for %s", packageName)
 }
 
+// GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
+func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (string, string, error) {
+	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
+	if err != nil {
+		return "", "", err
+	}
+
+	var packageInfo NpmPackageInfo
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&packageInfo); err != nil {
+		return "", "", fmt.Errorf("failed to parse NPM response: %w", err)
+	}
+
+	// Get all non-deprecated versions
+	versions := make([]string, 0, len(packageInfo.Versions))
+	for version, versionInfo := range packageInfo.Versions {
+		// Skip deprecated versions
+		if versionInfo.Deprecated == "" {
+			versions = append(versions, version)
+		}
+	}
+
+	return shared.FindBothLatestVersions(versions, constraint)
+}
+
+// fetchPackageInfo is a shared method to fetch package information from registries
+func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbose bool) ([]byte, error) {
+	// Parse .npmrc configuration from both local and global files
+	currentWorkingDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	npmrcPath := filepath.Join(currentWorkingDir, ".npmrc")
+	npmrcConfig, err := parseNpmrcFiles(npmrcPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse .npmrc: %w", err)
+	}
+
+	var targetRegistryURL string
+	if registryURL != "" {
+		targetRegistryURL = registryURL
+	} else {
+		targetRegistryURL = getRegistryForPackage(packageName, npmrcConfig)
+	}
+
+	url := fmt.Sprintf("%s/%s", targetRegistryURL, packageName)
+
+	if verbose {
+		fmt.Printf("Checking NPM package: %s (registry: %s)\n", packageName, targetRegistryURL)
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	request, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add authentication if available for this registry
+	if authToken := getAuthTokenForRegistry(targetRegistryURL, npmrcConfig); authToken != "" {
+		request.Header.Set("Authorization", "Bearer "+authToken)
+		if verbose {
+			fmt.Printf("Using authentication for registry: %s\n", targetRegistryURL)
+		}
+	}
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch package info: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("registry returned status %d for %s", response.StatusCode, packageName)
+	}
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return body, nil
+}
+
 // GetFileType returns the file type this registry client handles
-func (c *RegistryClient) GetFileType() string {
+func (client *RegistryClient) GetFileType() string {
 	return "npm"
 }
 

@@ -46,6 +46,15 @@ type SemanticVersion struct {
 	Patch int
 }
 
+// SemverChange represents the type of version change
+type SemverChange int
+
+const (
+	PatchChange SemverChange = iota
+	MinorChange
+	MajorChange
+)
+
 // Parser interface defines the contract for parsing dependencies from files
 type Parser interface {
 	ParseDependencies(filePath string) ([]Dependency, error)
@@ -60,7 +69,7 @@ type Updater interface {
 
 // RegistryClient interface defines the contract for fetching package information
 type RegistryClient interface {
-	GetLatestVersion(packageName string, verbose bool) (string, error)
 	GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error)
+	GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (absoluteLatest, constraintLatest string, err error)
 	GetFileType() string
 }
