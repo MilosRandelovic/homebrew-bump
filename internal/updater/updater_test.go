@@ -114,11 +114,11 @@ func TestIsSemverCompatible(t *testing.T) {
 		{"^1.0.0", "1.1.0-beta", false, "pre-release versions are skipped"},
 		{"^1.0.0", "1.1.0-alpha.1", false, "pre-release versions are skipped"},
 
-		// Other prefixes
-		{">=1.0.0", "1.1.0", false, "other prefixes are conservative"},
-		{">1.0.0", "1.1.0", false, "other prefixes are conservative"},
-		{"<2.0.0", "1.1.0", false, "other prefixes are conservative"},
-		{"<=2.0.0", "1.1.0", false, "other prefixes are conservative"},
+		// Comparison operator tests
+		{">=1.0.0", "1.1.0", true, ">= allows newer versions"},
+		{">1.0.0", "1.1.0", true, "> allows newer versions"},
+		{"<2.0.0", "1.1.0", true, "< allows older versions"},
+		{"<=2.0.0", "1.1.0", true, "<= allows older/same versions"},
 	}
 
 	for _, test := range tests {
@@ -266,11 +266,15 @@ func TestHasSemanticPrefix(t *testing.T) {
 		{"^1.0.0", true},
 		{"~2.3.4", true},
 		{">=3.0.0", true},
+		{">1.0.0", true},
+		{"<2.0.0", true},
+		{"<=2.0.0", true},
+		{">=1.0.0 <2.0.0", true},
+		{">1.0.0 <=2.0.0", true},
+		{">=1.2.3 <1.3.0", true},
 		{"1.5.0", false},
-		{">1.0.0", false},
-		{"<2.0.0", false},
-		{"<=2.0.0", false},
 		{"", false},
+		{">=1.0.0 1.5.0", false}, // Mix of semantic and non-semantic
 	}
 
 	for _, test := range tests {

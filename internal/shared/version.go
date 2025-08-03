@@ -14,10 +14,23 @@ func CleanVersion(version string) string {
 	return prefixRegex.ReplaceAllString(version, "")
 }
 
-// HasSemanticPrefix checks if a version string has a semantic versioning prefix like ^, ~, >=
+// HasSemanticPrefix checks if a version string has a semantic versioning prefix like ^, ~, >=, >, <, <=
 func HasSemanticPrefix(version string) bool {
+	// Handle compound constraints like ">=1.0.0 <2.0.0"
+	if strings.Contains(version, " ") {
+		parts := strings.FieldsSeq(version)
+		// All parts must have semantic prefixes
+		for part := range parts {
+			prefix := GetVersionPrefix(part)
+			if !(prefix == "^" || prefix == "~" || prefix == ">=" || prefix == ">" || prefix == "<=" || prefix == "<") {
+				return false
+			}
+		}
+		return true
+	}
+
 	prefix := GetVersionPrefix(version)
-	return prefix == "^" || prefix == "~" || prefix == ">="
+	return prefix == "^" || prefix == "~" || prefix == ">=" || prefix == ">" || prefix == "<=" || prefix == "<"
 }
 
 // GetVersionPrefix extracts the version prefix (^, ~, >=, etc.) from a version string
@@ -68,6 +81,11 @@ func ParseSemanticVersion(version string) (*SemanticVersion, error) {
 
 // IsSemverCompatible checks if the latest version is compatible with the original version constraint
 func IsSemverCompatible(originalVersion, latestVersion string) bool {
+	// Handle compound constraints like ">=1.0.0 <2.0.0"
+	if strings.Contains(originalVersion, " ") {
+		return isCompoundConstraintCompatible(originalVersion, latestVersion)
+	}
+
 	prefix := GetVersionPrefix(originalVersion)
 
 	// If no prefix, it's a hardcoded version - not compatible with semver
@@ -114,8 +132,90 @@ func IsSemverCompatible(originalVersion, latestVersion string) bool {
 			latestVer.Minor == currentVer.Minor &&
 			latestVer.Patch >= currentVer.Patch
 
+	case ">=":
+		// Greater than or equal - any version >= the specified version is acceptable
+		comparison := compareSemanticVersions(latestVer, currentVer)
+		return comparison >= 0
+
+	case ">":
+		// Greater than - any version > the specified version is acceptable
+		comparison := compareSemanticVersions(latestVer, currentVer)
+		return comparison > 0
+
+	case "<=":
+		// Less than or equal - any version <= the specified version is acceptable
+		comparison := compareSemanticVersions(latestVer, currentVer)
+		return comparison <= 0
+
+	case "<":
+		// Less than - any version < the specified version is acceptable
+		comparison := compareSemanticVersions(latestVer, currentVer)
+		return comparison < 0
+
 	default:
-		// For other prefixes like >=, >, <, <=, we'll be conservative and not update
+		// Unknown prefix - be conservative
+		return false
+	}
+}
+
+// isCompoundConstraintCompatible handles compound constraints like ">=1.0.0 <2.0.0"
+func isCompoundConstraintCompatible(constraint, latestVersion string) bool {
+	// If the latest version contains pre-release identifiers, be conservative and skip it
+	if strings.Contains(latestVersion, "-") {
+		return false
+	}
+
+	// Split constraint by spaces to get individual comparators
+	parts := strings.Fields(constraint)
+
+	// Parse the latest version once
+	latestVer, err := ParseSemanticVersion(latestVersion)
+	if err != nil {
+		return false
+	}
+
+	// All comparators must be satisfied for the constraint to be satisfied
+	for _, part := range parts {
+		if !isSingleComparatorSatisfied(part, latestVer) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isSingleComparatorSatisfied checks if a single comparator (like ">=1.0.0" or "<2.0.0") is satisfied
+func isSingleComparatorSatisfied(comparator string, latestVer *SemanticVersion) bool {
+	prefix := GetVersionPrefix(comparator)
+	if prefix == "" {
+		// Exact version match
+		exactVer, err := ParseSemanticVersion(comparator)
+		if err != nil {
+			return false
+		}
+		return compareSemanticVersions(latestVer, exactVer) == 0
+	}
+
+	// Parse the version part of the comparator
+	constraintVer, err := ParseSemanticVersion(CleanVersion(comparator))
+	if err != nil {
+		return false
+	}
+
+	comparison := compareSemanticVersions(latestVer, constraintVer)
+
+	switch prefix {
+	case ">=":
+		return comparison >= 0
+	case ">":
+		return comparison > 0
+	case "<=":
+		return comparison <= 0
+	case "<":
+		return comparison < 0
+	case "=":
+		return comparison == 0
+	default:
 		return false
 	}
 }

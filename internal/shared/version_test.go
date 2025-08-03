@@ -111,11 +111,62 @@ func TestIsSemverCompatible(t *testing.T) {
 		{"^1.0.0", "1.1.0-beta", false, "pre-release versions are skipped"},
 		{"^1.0.0", "1.1.0-alpha.1", false, "pre-release versions are skipped"},
 
-		// Other prefixes
-		{">=1.0.0", "1.1.0", false, "other prefixes are conservative"},
-		{">1.0.0", "1.1.0", false, "other prefixes are conservative"},
-		{"<2.0.0", "1.1.0", false, "other prefixes are conservative"},
-		{"<=2.0.0", "1.1.0", false, "other prefixes are conservative"},
+		// Greater than or equal (>=) tests
+		{">=1.0.0", "1.0.0", true, ">= allows same version"},
+		{">=1.0.0", "1.0.1", true, ">= allows patch updates"},
+		{">=1.0.0", "1.1.0", true, ">= allows minor updates"},
+		{">=1.0.0", "2.0.0", true, ">= allows major updates"},
+		{">=1.2.3", "1.2.2", false, ">= does not allow downgrades"},
+		{">=1.2.3", "1.1.9", false, ">= does not allow downgrades"},
+
+		// Greater than (>) tests
+		{">1.0.0", "1.0.0", false, "> does not allow same version"},
+		{">1.0.0", "1.0.1", true, "> allows patch updates"},
+		{">1.0.0", "1.1.0", true, "> allows minor updates"},
+		{">1.0.0", "2.0.0", true, "> allows major updates"},
+		{">1.2.3", "1.2.3", false, "> does not allow same version"},
+		{">1.2.3", "1.2.2", false, "> does not allow downgrades"},
+
+		// Less than or equal (<=) tests
+		{"<=2.0.0", "2.0.0", true, "<= allows same version"},
+		{"<=2.0.0", "1.9.9", true, "<= allows older versions"},
+		{"<=2.0.0", "1.0.0", true, "<= allows much older versions"},
+		{"<=2.0.0", "2.0.1", false, "<= does not allow newer versions"},
+		{"<=2.0.0", "2.1.0", false, "<= does not allow newer versions"},
+		{"<=2.0.0", "3.0.0", false, "<= does not allow newer versions"},
+
+		// Less than (<) tests
+		{"<2.0.0", "2.0.0", false, "< does not allow same version"},
+		{"<2.0.0", "1.9.9", true, "< allows older versions"},
+		{"<2.0.0", "1.0.0", true, "< allows much older versions"},
+		{"<2.0.0", "2.0.1", false, "< does not allow newer versions"},
+		{"<2.0.0", "2.1.0", false, "< does not allow newer versions"},
+		{"<2.0.0", "3.0.0", false, "< does not allow newer versions"},
+
+		// Compound constraint tests
+		{">=1.0.0 <2.0.0", "1.0.0", true, "compound allows version at lower bound"},
+		{">=1.0.0 <2.0.0", "1.5.0", true, "compound allows version in range"},
+		{">=1.0.0 <2.0.0", "1.9.9", true, "compound allows version near upper bound"},
+		{">=1.0.0 <2.0.0", "2.0.0", false, "compound excludes upper bound"},
+		{">=1.0.0 <2.0.0", "0.9.9", false, "compound excludes version below lower bound"},
+		{">=1.0.0 <2.0.0", "2.0.1", false, "compound excludes version above upper bound"},
+
+		{">1.0.0 <=2.0.0", "1.0.0", false, "compound > excludes lower bound"},
+		{">1.0.0 <=2.0.0", "1.0.1", true, "compound allows version above lower bound"},
+		{">1.0.0 <=2.0.0", "2.0.0", true, "compound <= includes upper bound"},
+		{">1.0.0 <=2.0.0", "2.0.1", false, "compound excludes version above upper bound"},
+
+		{">=1.2.3 <1.3.0", "1.2.3", true, "compound patch range allows lower bound"},
+		{">=1.2.3 <1.3.0", "1.2.5", true, "compound patch range allows patch updates"},
+		{">=1.2.3 <1.3.0", "1.2.99", true, "compound patch range allows high patch"},
+		{">=1.2.3 <1.3.0", "1.3.0", false, "compound patch range excludes upper bound"},
+		{">=1.2.3 <1.3.0", "1.1.9", false, "compound patch range excludes older versions"},
+
+		// Complex compound constraints
+		{">0.0.0 <1.0.0", "0.9.9", true, "compound pre-1.0 range"},
+		{">0.0.0 <1.0.0", "1.0.0", false, "compound pre-1.0 excludes 1.0.0"},
+		{">=2.1.0 <3.0.0", "2.5.8", true, "compound major range"},
+		{">=2.1.0 <3.0.0", "3.0.0", false, "compound major range excludes next major"},
 	}
 
 	for _, test := range tests {
