@@ -192,7 +192,11 @@ func main() {
 				fmt.Printf("  %s%s%s: %s\n", ColorCyan, dependencyError.Name, ColorReset, dependencyError.Error)
 			}
 		} else {
-			fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
+			if *semver {
+				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -semver -verbose' to see the full output.\n", len(errors))
+			} else {
+				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
+			}
 		}
 	}
 
@@ -210,7 +214,11 @@ func main() {
 		}
 	} else {
 		if len(outdated) > 0 {
-			fmt.Printf("\nRun 'bump -update' to update dependencies to latest versions.\n")
+			if *semver {
+				fmt.Printf("\nRun 'bump -update -semver' to update dependencies while respecting semver constraints.\n")
+			} else {
+				fmt.Printf("\nRun 'bump -update' to update dependencies to latest versions.\n")
+			}
 		}
 	}
 }
