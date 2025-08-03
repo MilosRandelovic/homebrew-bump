@@ -16,9 +16,8 @@ func CleanVersion(version string) string {
 
 // HasSemanticPrefix checks if a version string has a semantic versioning prefix like ^, ~, >=
 func HasSemanticPrefix(version string) bool {
-	return strings.HasPrefix(version, "^") ||
-		strings.HasPrefix(version, "~") ||
-		strings.HasPrefix(version, ">=")
+	prefix := GetVersionPrefix(version)
+	return prefix == "^" || prefix == "~" || prefix == ">="
 }
 
 // GetVersionPrefix extracts the version prefix (^, ~, >=, etc.) from a version string
@@ -225,4 +224,30 @@ func compareSemanticVersions(a, b *SemanticVersion) int {
 		return 1
 	}
 	return 0
+}
+
+// GetSemverChange determines the type of version change between two versions
+func GetSemverChange(currentVer, latestVer string) SemverChange {
+	currentVersion, err1 := ParseSemanticVersion(CleanVersion(currentVer))
+	latestVersion, err2 := ParseSemanticVersion(CleanVersion(latestVer))
+
+	if err1 != nil || err2 != nil {
+		return PatchChange // Default to patch if we can't parse
+	}
+
+	// Handle cases where latest is not actually newer
+	comparison := compareSemanticVersions(latestVersion, currentVersion)
+	if comparison <= 0 {
+		return PatchChange // Same version or downgrade defaults to patch
+	}
+
+	if latestVersion.Major > currentVersion.Major {
+		return MajorChange
+	} else if latestVersion.Minor > currentVersion.Minor {
+		return MinorChange
+	} else if latestVersion.Patch > currentVersion.Patch {
+		return PatchChange
+	}
+
+	return PatchChange
 }

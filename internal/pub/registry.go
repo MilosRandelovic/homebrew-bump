@@ -26,11 +26,6 @@ func NewRegistryClient() *RegistryClient {
 	return &RegistryClient{}
 }
 
-// GetLatestVersion fetches the latest version from pub.dev API or private registries
-func (client *RegistryClient) GetLatestVersion(packageName string, verbose bool) (string, error) {
-	return client.GetLatestVersionFromRegistry(packageName, "", verbose)
-}
-
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
 func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
 	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)

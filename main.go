@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/parser"
+	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
 )
 
@@ -23,15 +22,6 @@ const (
 	ColorYellow = "\033[33m" // Minor version changes
 	ColorGreen  = "\033[32m" // Patch version changes
 	ColorCyan   = "\033[36m" // Package names
-)
-
-// SemverChange represents the type of version change
-type SemverChange int
-
-const (
-	PatchChange SemverChange = iota
-	MinorChange
-	MajorChange
 )
 
 func main() {
@@ -165,7 +155,7 @@ func main() {
 
 	// Display results with colors and proper formatting
 	for _, dependency := range outdated {
-		change := getSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
+		change := shared.GetSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
 		color := getChangeColor(change)
 
 		// Use the original version from the dependency struct
@@ -247,64 +237,14 @@ func autoDetectDependencyFile() (string, string, error) {
 	return "", "", fmt.Errorf("no package.json or pubspec.yaml found in current directory")
 }
 
-// parseVersion extracts major, minor, patch from a version string
-func parseVersion(version string) (int, int, int, error) {
-	// Remove prefix characters like ^, ~, >=, etc.
-	prefixRegex := regexp.MustCompile(`^[\^~>=<]+`)
-	cleanedVersion := prefixRegex.ReplaceAllString(version, "")
-
-	// Split by dots
-	parts := strings.Split(cleanedVersion, ".")
-	if len(parts) < 3 {
-		return 0, 0, 0, fmt.Errorf("invalid version format: %s", version)
-	}
-
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	minor, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	patch, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	return major, minor, patch, nil
-}
-
-// getSemverChange determines the type of version change
-func getSemverChange(currentVer, latestVer string) SemverChange {
-	currentMajor, currentMinor, currentPatch, err1 := parseVersion(currentVer)
-	latestMajor, latestMinor, latestPatch, err2 := parseVersion(latestVer)
-
-	if err1 != nil || err2 != nil {
-		return PatchChange // Default to patch if we can't parse
-	}
-
-	if latestMajor > currentMajor {
-		return MajorChange
-	} else if latestMinor > currentMinor {
-		return MinorChange
-	} else if latestPatch > currentPatch {
-		return PatchChange
-	}
-
-	return PatchChange
-}
-
 // getChangeColor returns the appropriate color for the version change type
-func getChangeColor(change SemverChange) string {
+func getChangeColor(change shared.SemverChange) string {
 	switch change {
-	case MajorChange:
+	case shared.MajorChange:
 		return ColorRed
-	case MinorChange:
+	case shared.MinorChange:
 		return ColorYellow
-	case PatchChange:
+	case shared.PatchChange:
 		return ColorGreen
 	default:
 		return ColorReset

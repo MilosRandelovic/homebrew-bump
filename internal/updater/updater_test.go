@@ -286,7 +286,7 @@ type MockRegistryClient struct {
 	packageVersions map[string][]string
 }
 
-func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName string) (string, error) {
+func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", fmt.Errorf("package not found")
@@ -294,12 +294,16 @@ func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName s
 	return versions[len(versions)-1], nil
 }
 
-func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint string) (string, string, error) {
+func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint string, verbose bool) (string, string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", "", fmt.Errorf("package not found")
 	}
 	return shared.FindBothLatestVersions(versions, constraint)
+}
+
+func (mockClient *MockRegistryClient) GetFileType() string {
+	return "mock"
 }
 
 func TestCheckForUpdatesIntegration(t *testing.T) {
