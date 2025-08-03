@@ -135,6 +135,21 @@ func main() {
 	errors := result.Errors
 	semverSkipped := result.SemverSkipped
 
+	// Sort outdated dependencies alphabetically by name
+	sort.Slice(outdated, func(i, j int) bool {
+		return outdated[i].Name < outdated[j].Name
+	})
+
+	// Sort errors alphabetically by name
+	sort.Slice(errors, func(i, j int) bool {
+		return errors[i].Name < errors[j].Name
+	})
+
+	// Sort semver skipped packages alphabetically by name
+	sort.Slice(semverSkipped, func(i, j int) bool {
+		return semverSkipped[i].Name < semverSkipped[j].Name
+	})
+
 	if len(outdated) == 0 && len(errors) == 0 && (!*semver || len(semverSkipped) == 0) {
 		fmt.Println("\nAll dependencies are up to date!")
 		return
@@ -143,11 +158,6 @@ func main() {
 	if !*verbose {
 		fmt.Printf("\n") // Add space after progress bar only in non-verbose mode
 	}
-
-	// Sort outdated dependencies alphabetically by name
-	sort.Slice(outdated, func(i, j int) bool {
-		return outdated[i].Name < outdated[j].Name
-	})
 
 	if *verbose && len(outdated) > 0 {
 		fmt.Printf("\nFound %d outdated dependencies:\n", len(outdated))
