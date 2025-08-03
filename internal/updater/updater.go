@@ -67,8 +67,21 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 
 		// If semver flag is enabled and we have a prefixed version, get both versions in one call
 		if semver && shared.HasSemanticPrefix(dependency.OriginalVersion) {
-			absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, verbose)
+			absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, verbose)
 			if err != nil {
+				// If constraint error, use the absolute latest already returned for semver skipped
+				if strings.Contains(err.Error(), "no versions satisfy the constraint") && absoluteLatest != "" {
+					// Add to semver skipped since constraint is incompatible but package exists
+					semverSkipped = append(semverSkipped, shared.SemverSkipped{
+						Name:            dependency.Name,
+						CurrentVersion:  dependency.Version,
+						LatestVersion:   absoluteLatest,
+						OriginalVersion: dependency.OriginalVersion,
+						Reason:          "incompatible with constraint",
+					})
+					continue
+				}
+				// If we can't get latest version or it's a different error, treat as error
 				if verbose {
 					fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
 				}

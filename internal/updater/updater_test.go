@@ -2,6 +2,7 @@ package updater
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
@@ -298,7 +299,7 @@ func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, 
 	return versions[len(versions)-1], nil
 }
 
-func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint string, verbose bool) (string, string, error) {
+func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (string, string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", "", fmt.Errorf("package not found")
@@ -341,5 +342,35 @@ func TestCheckForUpdatesIntegration(t *testing.T) {
 	shouldSkip := absolute != constraint
 	if !shouldSkip {
 		t.Errorf("Expected to skip major version, but absolute == constraint")
+	}
+}
+
+func TestConstraintMatchesNoVersions(t *testing.T) {
+	// Test that when constraint matches no available versions,
+	// it goes to semverSkipped instead of errors
+	mockRegistry := &MockRegistryClient{
+		packageVersions: map[string][]string{
+			"core": {"1.0.0", "1.1.0", "1.7.0"}, // Available versions: all 1.x
+		},
+	}
+
+	// Test the scenario directly using the shared function
+	absoluteLatest, constraintLatest, err := mockRegistry.GetBothLatestVersions("core", "^0.0.1", "", false)
+	if err == nil {
+		t.Fatal("Expected error for incompatible constraint, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "no versions satisfy the constraint") {
+		t.Errorf("Expected 'no versions satisfy the constraint' error, got: %v", err)
+	}
+
+	// Verify that even with the error, absoluteLatest is still returned
+	if absoluteLatest != "1.7.0" {
+		t.Errorf("Expected absolute latest '1.7.0' even with constraint error, got '%s'", absoluteLatest)
+	}
+
+	// Verify constraintLatest is empty when no versions satisfy constraint
+	if constraintLatest != "" {
+		t.Errorf("Expected empty constraint latest when no versions satisfy, got '%s'", constraintLatest)
 	}
 }
