@@ -70,6 +70,6 @@ type Updater interface {
 // RegistryClient interface defines the contract for fetching package information
 type RegistryClient interface {
 	GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error)
-	GetBothLatestVersions(packageName, constraint string, verbose bool) (absoluteLatest, constraintLatest string, err error)
+	GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (absoluteLatest, constraintLatest string, err error)
 	GetFileType() string
 }

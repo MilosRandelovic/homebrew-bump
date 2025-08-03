@@ -42,8 +42,8 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 }
 
 // GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
-func (client *RegistryClient) GetBothLatestVersions(packageName, constraint string, verbose bool) (string, string, error) {
-	body, err := client.fetchPackageInfo(packageName, "", verbose)
+func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (string, string, error) {
+	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
 	if err != nil {
 		return "", "", err
 	}
