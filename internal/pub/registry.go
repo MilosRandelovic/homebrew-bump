@@ -1,6 +1,7 @@
 package pub
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,10 +33,51 @@ func (c *RegistryClient) GetLatestVersion(packageName string, verbose bool) (str
 
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
 func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
+	body, err := c.fetchPackageInfo(packageName, registryURL, verbose)
+	if err != nil {
+		return "", err
+	}
+
+	var packageInfo PubDevPackageInfo
+	if err := json.Unmarshal(body, &packageInfo); err != nil {
+		return "", fmt.Errorf("failed to parse pub.dev response: %w", err)
+	}
+
+	return packageInfo.Latest.Version, nil
+}
+
+// GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
+func (c *RegistryClient) GetBothLatestVersions(packageName, constraint string, verbose bool) (string, string, error) {
+	body, err := c.fetchPackageInfo(packageName, "", verbose)
+	if err != nil {
+		return "", "", err
+	}
+
+	var packageInfo struct {
+		Versions []struct {
+			Version string `json:"version"`
+		} `json:"versions"`
+	}
+
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&packageInfo); err != nil {
+		return "", "", fmt.Errorf("error decoding response: %w", err)
+	}
+
+	// Extract version strings
+	var versions []string
+	for _, v := range packageInfo.Versions {
+		versions = append(versions, v.Version)
+	}
+
+	return shared.FindBothLatestVersions(versions, constraint)
+}
+
+// fetchPackageInfo is a shared method to fetch package information from registries
+func (c *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbose bool) ([]byte, error) {
 	// Parse pub configuration
 	config, err := parsePubConfig()
 	if err != nil {
-		return "", fmt.Errorf("failed to parse pub config: %w", err)
+		return nil, fmt.Errorf("failed to parse pub config: %w", err)
 	}
 
 	var targetRegistry *RegistryConfig
@@ -72,7 +114,7 @@ func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL s
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Add authentication if available for this registry
@@ -85,25 +127,20 @@ func (c *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL s
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch package info: %w", err)
+		return nil, fmt.Errorf("failed to fetch package info: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("registry returned status %d for %s", resp.StatusCode, packageName)
+		return nil, fmt.Errorf("registry returned status %d for %s", resp.StatusCode, packageName)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	var packageInfo PubDevPackageInfo
-	if err := json.Unmarshal(body, &packageInfo); err != nil {
-		return "", fmt.Errorf("failed to parse pub.dev response: %w", err)
-	}
-
-	return packageInfo.Latest.Version, nil
+	return body, nil
 }
 
 // GetFileType returns the file type this registry client handles

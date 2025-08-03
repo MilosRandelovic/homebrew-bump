@@ -61,42 +61,65 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 			continue
 		}
 
-		latestVersion, err := registryClient.GetLatestVersionFromRegistry(dep.Name, dep.HostedURL, verbose)
-		if err != nil {
-			errors = append(errors, shared.DependencyError{
-				Name:  dep.Name,
-				Error: err.Error(),
-			})
-			if verbose {
-				fmt.Printf("Error checking %s: %v\n", dep.Name, err)
-			}
-			continue
-		}
+		var latestVersion string
+		var absoluteLatest string
+		var err error
 
-		currentVersion := dep.Version // Already cleaned in parser
-		if currentVersion != latestVersion && latestVersion != "" {
-			// If semver flag is enabled, check if the latest version is compatible
-			if semver && !shared.IsSemverCompatible(dep.OriginalVersion, latestVersion) {
+		// If semver flag is enabled and we have a prefixed version, get both versions in one call
+		if semver && shared.HasSemanticPrefix(dep.OriginalVersion) {
+			absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dep.Name, dep.OriginalVersion, verbose)
+			if err != nil {
 				if verbose {
-					fmt.Printf("Skipping %s: latest version %s not compatible with constraint %s\n",
-						dep.Name, latestVersion, dep.OriginalVersion)
+					fmt.Printf("Error checking %s: %v\n", dep.Name, err)
 				}
-				semverSkipped = append(semverSkipped, shared.SemverSkipped{
-					Name:            dep.Name,
-					CurrentVersion:  currentVersion,
-					LatestVersion:   latestVersion,
-					OriginalVersion: dep.OriginalVersion,
-					Reason:          "incompatible with constraint",
+				errors = append(errors, shared.DependencyError{
+					Name:  dep.Name,
+					Error: err.Error(),
 				})
 				continue
 			}
+		} else {
+			// Use absolute latest version fetching for non-semver cases
+			latestVersion, err = registryClient.GetLatestVersionFromRegistry(dep.Name, dep.HostedURL, verbose)
+			if err != nil {
+				errors = append(errors, shared.DependencyError{
+					Name:  dep.Name,
+					Error: err.Error(),
+				})
+				if verbose {
+					fmt.Printf("Error checking %s: %v\n", dep.Name, err)
+				}
+				continue
+			}
+			absoluteLatest = latestVersion // Same as latest when not using semver constraints
+		}
 
+		currentVersion := dep.Version // Already cleaned in parser
+
+		// Check if there's an update available
+		if currentVersion != latestVersion && latestVersion != "" {
 			outdated = append(outdated, shared.OutdatedDependency{
 				Name:            dep.Name,
 				CurrentVersion:  currentVersion,
 				LatestVersion:   latestVersion,
 				OriginalVersion: dep.OriginalVersion,
 				HostedURL:       dep.HostedURL,
+			})
+		}
+
+		// If semver is enabled and we have both versions, check if there's a newer incompatible version
+		if semver && shared.HasSemanticPrefix(dep.OriginalVersion) && absoluteLatest != latestVersion {
+			if verbose {
+				fmt.Printf("Note: %s has newer version %s available, but it's incompatible with constraint %s (using %s)\n",
+					dep.Name, absoluteLatest, dep.OriginalVersion, latestVersion)
+			}
+			// Add to semverSkipped if the absolute latest is a major version jump
+			semverSkipped = append(semverSkipped, shared.SemverSkipped{
+				Name:            dep.Name,
+				CurrentVersion:  currentVersion,
+				LatestVersion:   absoluteLatest,
+				OriginalVersion: dep.OriginalVersion,
+				Reason:          "incompatible with constraint",
 			})
 		}
 	}

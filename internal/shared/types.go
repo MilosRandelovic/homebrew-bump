@@ -62,5 +62,6 @@ type Updater interface {
 type RegistryClient interface {
 	GetLatestVersion(packageName string, verbose bool) (string, error)
 	GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error)
+	GetBothLatestVersions(packageName, constraint string, verbose bool) (absoluteLatest, constraintLatest string, err error)
 	GetFileType() string
 }

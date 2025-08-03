@@ -3,6 +3,7 @@ package shared
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -11,6 +12,13 @@ import (
 func CleanVersion(version string) string {
 	re := regexp.MustCompile(`^[\^~>=<]+`)
 	return re.ReplaceAllString(version, "")
+}
+
+// HasSemanticPrefix checks if a version string has a semantic versioning prefix like ^, ~, >=
+func HasSemanticPrefix(version string) bool {
+	return strings.HasPrefix(version, "^") ||
+		strings.HasPrefix(version, "~") ||
+		strings.HasPrefix(version, ">=")
 }
 
 // GetVersionPrefix extracts the version prefix (^, ~, >=, etc.) from a version string
@@ -111,4 +119,108 @@ func IsSemverCompatible(originalVersion, latestVersion string) bool {
 		// For other prefixes like >=, >, <, <=, we'll be conservative and not update
 		return false
 	}
+}
+
+// FindLatestVersionSatisfyingConstraint finds the latest version from a list that satisfies a constraint
+func FindLatestVersionSatisfyingConstraint(versions []string, constraint string) (string, error) {
+	if len(versions) == 0 {
+		return "", fmt.Errorf("no versions provided")
+	}
+
+	// Filter versions that satisfy the constraint
+	var satisfyingVersions []string
+	for _, version := range versions {
+		if IsSemverCompatible(constraint, version) {
+			satisfyingVersions = append(satisfyingVersions, version)
+		}
+	}
+
+	if len(satisfyingVersions) == 0 {
+		return "", fmt.Errorf("no versions satisfy the constraint %s", constraint)
+	}
+
+	// Sort versions to find the latest
+	sort.Slice(satisfyingVersions, func(i, j int) bool {
+		verI, errI := ParseSemanticVersion(satisfyingVersions[i])
+		verJ, errJ := ParseSemanticVersion(satisfyingVersions[j])
+		if errI != nil || errJ != nil {
+			// Fallback to string comparison if parsing fails
+			return satisfyingVersions[i] < satisfyingVersions[j]
+		}
+		return compareSemanticVersions(verI, verJ) < 0
+	})
+
+	// Return the latest (last in sorted array)
+	return satisfyingVersions[len(satisfyingVersions)-1], nil
+}
+
+// FindBothLatestVersions finds both the absolute latest version and the latest version satisfying a constraint
+// Returns (absoluteLatest, constraintLatest, error)
+func FindBothLatestVersions(versions []string, constraint string) (string, string, error) {
+	if len(versions) == 0 {
+		return "", "", fmt.Errorf("no versions provided")
+	}
+
+	// Filter out pre-release versions (alpha, beta, etc.)
+	var stableVersions []string
+	for _, version := range versions {
+		if !strings.Contains(version, "-") {
+			stableVersions = append(stableVersions, version)
+		}
+	}
+
+	if len(stableVersions) == 0 {
+		return "", "", fmt.Errorf("no stable versions available")
+	}
+
+	// Sort stable versions
+	sort.Slice(stableVersions, func(i, j int) bool {
+		verI, errI := ParseSemanticVersion(stableVersions[i])
+		verJ, errJ := ParseSemanticVersion(stableVersions[j])
+		if errI != nil || errJ != nil {
+			// Fallback to string comparison if parsing fails
+			return stableVersions[i] < stableVersions[j]
+		}
+		return compareSemanticVersions(verI, verJ) < 0
+	})
+
+	// Absolute latest is the last in sorted stable versions
+	absoluteLatest := stableVersions[len(stableVersions)-1]
+
+	// Find latest satisfying constraint
+	var constraintLatest string
+	for i := len(stableVersions) - 1; i >= 0; i-- {
+		if IsSemverCompatible(constraint, stableVersions[i]) {
+			constraintLatest = stableVersions[i]
+			break
+		}
+	}
+
+	if constraintLatest == "" {
+		return absoluteLatest, "", fmt.Errorf("no versions satisfy the constraint %s", constraint)
+	}
+
+	return absoluteLatest, constraintLatest, nil
+} // compareSemanticVersions compares two semantic versions
+// Returns: -1 if a < b, 0 if a == b, 1 if a > b
+func compareSemanticVersions(a, b *SemanticVersion) int {
+	if a.Major != b.Major {
+		if a.Major < b.Major {
+			return -1
+		}
+		return 1
+	}
+	if a.Minor != b.Minor {
+		if a.Minor < b.Minor {
+			return -1
+		}
+		return 1
+	}
+	if a.Patch != b.Patch {
+		if a.Patch < b.Patch {
+			return -1
+		}
+		return 1
+	}
+	return 0
 }
