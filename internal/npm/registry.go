@@ -20,7 +20,8 @@ type RegistryClient struct{}
 type NpmPackageInfo struct {
 	DistTags map[string]string `json:"dist-tags"`
 	Versions map[string]struct {
-		Version string `json:"version"`
+		Version    string `json:"version"`
+		Deprecated string `json:"deprecated,omitempty"`
 	} `json:"versions"`
 }
 
@@ -60,10 +61,13 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 		return "", "", fmt.Errorf("failed to parse NPM response: %w", err)
 	}
 
-	// Get all versions
+	// Get all non-deprecated versions
 	versions := make([]string, 0, len(packageInfo.Versions))
-	for version := range packageInfo.Versions {
-		versions = append(versions, version)
+	for version, versionInfo := range packageInfo.Versions {
+		// Skip deprecated versions
+		if versionInfo.Deprecated == "" {
+			versions = append(versions, version)
+		}
 	}
 
 	return shared.FindBothLatestVersions(versions, constraint)
