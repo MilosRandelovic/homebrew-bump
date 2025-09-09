@@ -45,7 +45,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Handle shorthand flags
+	// Handle shorthand flags and track if any shorthand is used
+	usingShorthands := *updateShort || *verboseShort || *versionShort || *helpShort || *semverShort
+
+	// Declare flag strings based on shorthand usage
+	updateFlag := "-update"
+	semverFlag := "-semver"
+	verboseFlag := "-verbose"
+	if usingShorthands {
+		updateFlag = "-u"
+		semverFlag = "-s"
+		verboseFlag = "-v"
+	}
+
 	if *updateShort {
 		*update = true
 	}
@@ -190,7 +202,7 @@ func main() {
 				}
 			}
 		} else {
-			fmt.Printf("\n%d packages were skipped due to updates not meeting semver constraints. Run 'bump -semver -verbose' to see the full output.\n", len(semverSkipped))
+			fmt.Printf("\n%d packages were skipped due to updates not meeting semver constraints. Run 'bump %s %s' to see the full output.\n", len(semverSkipped), semverFlag, verboseFlag)
 		}
 	}
 
@@ -203,9 +215,9 @@ func main() {
 			}
 		} else {
 			if *semver {
-				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -semver -verbose' to see the full output.\n", len(errors))
+				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump %s %s' to see the full output.\n", len(errors), semverFlag, verboseFlag)
 			} else {
-				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump -verbose' to see the full output.\n", len(errors))
+				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump %s' to see the full output.\n", len(errors), verboseFlag)
 			}
 		}
 	}
@@ -225,9 +237,9 @@ func main() {
 	} else {
 		if len(outdated) > 0 {
 			if *semver {
-				fmt.Printf("\nRun 'bump -update -semver' to update dependencies while respecting semver constraints.\n")
+				fmt.Printf("\nRun 'bump %s %s' to update dependencies while respecting semver constraints.\n", updateFlag, semverFlag)
 			} else {
-				fmt.Printf("\nRun 'bump -update' to update dependencies to latest versions.\n")
+				fmt.Printf("\nRun 'bump %s' to update dependencies to latest versions.\n", updateFlag)
 			}
 		}
 	}
