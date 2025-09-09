@@ -175,19 +175,38 @@ func main() {
 		fmt.Printf("\nFound %d outdated dependencies:\n", len(outdated))
 	}
 
-	// Display results with colors and proper formatting
-	for _, dependency := range outdated {
-		change := shared.GetSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
-		color := getChangeColor(change)
+	// Display results
+	if len(outdated) > 0 {
+		// Calculate maximum widths for proper alignment
+		maxNameWidth := 0
+		maxCurrentVersionWidth := 0
+		for _, dependency := range outdated {
+			if len(dependency.Name) > maxNameWidth {
+				maxNameWidth = len(dependency.Name)
+			}
+			if len(dependency.OriginalVersion) > maxCurrentVersionWidth {
+				maxCurrentVersionWidth = len(dependency.OriginalVersion)
+			}
+		}
 
-		// Use the original version from the dependency struct
-		currentVersion := dependency.OriginalVersion
-		latestVersion := strings.Replace(currentVersion, dependency.CurrentVersion, dependency.LatestVersion, 1)
+		// Add some padding
+		maxNameWidth += 2
+		maxCurrentVersionWidth += 2
 
-		fmt.Printf("%s%-30s%s  %15s  →  %s%15s%s\n",
-			ColorCyan, dependency.Name, ColorReset,
-			currentVersion,
-			color, latestVersion, ColorReset)
+		for _, dependency := range outdated {
+			change := shared.GetSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
+			color := getChangeColor(change)
+
+			// Use the original version from the dependency struct
+			currentVersion := dependency.OriginalVersion
+			latestVersion := strings.Replace(currentVersion, dependency.CurrentVersion, dependency.LatestVersion, 1)
+
+			// Apply color to output for better visibility
+			fmt.Printf("%s%-*s%s  %*s  →  %s%s%s\n",
+				ColorCyan, maxNameWidth, dependency.Name, ColorReset,
+				maxCurrentVersionWidth, currentVersion,
+				color, latestVersion, ColorReset)
+		}
 	}
 
 	// Display semver skipped summary if in semver mode and there were skipped packages

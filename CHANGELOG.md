@@ -4,6 +4,7 @@
 
 - Improved semver version handling
 - Fixed handling of pre-release versions
+- Console formatting improvements
 
 ## [1.0.1]
 
