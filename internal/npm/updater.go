@@ -26,6 +26,10 @@ func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.Ou
 	// Convert to string for regex replacement
 	content := string(data)
 
+	if verbose && len(outdated) > 0 {
+		fmt.Printf("\n") // Add space before updates in verbose mode
+	}
+
 	// Update each outdated dependency using regex
 	for _, dependency := range outdated {
 		// Escape special regex characters in package name

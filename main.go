@@ -168,7 +168,7 @@ func main() {
 	}
 
 	if !*verbose {
-		fmt.Printf("\n") // Add space after progress bar only in non-verbose mode
+		fmt.Printf("\n") // Add new line after progress bar only in non-verbose mode
 	}
 
 	if *verbose && len(outdated) > 0 {
