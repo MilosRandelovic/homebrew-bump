@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
@@ -50,36 +51,37 @@ func TestGetVersionPrefix(t *testing.T) {
 	}
 }
 
-func TestParseSemanticVersion(t *testing.T) {
+func TestSemverVersionParsing(t *testing.T) {
 	tests := []struct {
-		input    string
-		expected *shared.SemanticVersion
-		hasError bool
+		input       string
+		expectedMaj uint64
+		expectedMin uint64
+		expectedPat uint64
+		hasError    bool
 	}{
-		{"1.0.0", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
-		{"2.3.4", &shared.SemanticVersion{Major: 2, Minor: 3, Patch: 4}, false},
-		{"0.1.2", &shared.SemanticVersion{Major: 0, Minor: 1, Patch: 2}, false},
-		{"10.20.30", &shared.SemanticVersion{Major: 10, Minor: 20, Patch: 30}, false},
-		{"1.0.0-beta", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
-		{"2.3.4-alpha.1", &shared.SemanticVersion{Major: 2, Minor: 3, Patch: 4}, false},
-		{"1.0.0+build.1", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
-		{"1.0.0-beta+build.1", &shared.SemanticVersion{Major: 1, Minor: 0, Patch: 0}, false},
-		{"invalid", nil, true},
-		{"1.0", nil, true},
-		{"1.0.x", nil, true},
+		{"1.0.0", 1, 0, 0, false},
+		{"2.3.4", 2, 3, 4, false},
+		{"0.1.2", 0, 1, 2, false},
+		{"10.20.30", 10, 20, 30, false},
+		{"1.0.0-beta", 1, 0, 0, false},
+		{"2.3.4-alpha.1", 2, 3, 4, false},
+		{"1.0.0+build.1", 1, 0, 0, false},
+		{"1.0.0-beta+build.1", 1, 0, 0, false},
+		{"invalid", 0, 0, 0, true},
+		{"1.0.x", 0, 0, 0, true},
 	}
 
 	for _, test := range tests {
-		result, err := shared.ParseSemanticVersion(test.input)
+		result, err := semver.NewVersion(test.input)
 		if test.hasError {
 			if err == nil {
-				t.Errorf("ParseSemanticVersion(%s) expected error but got none", test.input)
+				t.Errorf("semver.NewVersion(%s) expected error but got none", test.input)
 			}
 		} else {
 			if err != nil {
-				t.Errorf("ParseSemanticVersion(%s) unexpected error: %v", test.input, err)
-			} else if result.Major != test.expected.Major || result.Minor != test.expected.Minor || result.Patch != test.expected.Patch {
-				t.Errorf("ParseSemanticVersion(%s) = %+v, expected %+v", test.input, result, test.expected)
+				t.Errorf("semver.NewVersion(%s) unexpected error: %v", test.input, err)
+			} else if result.Major() != test.expectedMaj || result.Minor() != test.expectedMin || result.Patch() != test.expectedPat {
+				t.Errorf("semver.NewVersion(%s) = %d.%d.%d, expected %d.%d.%d", test.input, result.Major(), result.Minor(), result.Patch(), test.expectedMaj, test.expectedMin, test.expectedPat)
 			}
 		}
 	}
@@ -97,9 +99,9 @@ func TestIsSemverCompatible(t *testing.T) {
 		{"^1.0.0", "1.1.0", true, "caret allows minor updates"},
 		{"^1.0.0", "2.0.0", false, "caret does not allow major updates"},
 		{"^0.1.0", "0.1.1", true, "caret allows patch updates for 0.x"},
-		{"^0.1.0", "0.2.0", true, "caret allows minor updates for 0.x"},
+		{"^0.1.0", "0.2.0", false, "caret does not allow minor updates for 0.x in strict semver"},
 		{"^0.1.0", "1.0.0", false, "caret does not allow major updates for 0.x"},
-		{"^0.0.1", "0.0.2", true, "caret allows patch updates for 0.0.x"},
+		{"^0.0.1", "0.0.2", false, "caret does not allow patch updates for 0.0.x in strict semver"},
 		{"^0.0.1", "0.1.0", false, "caret does not allow minor updates for 0.0.x"},
 
 		// Tilde tests
