@@ -17,7 +17,7 @@ func NewParser() *Parser {
 }
 
 // ParseDependencies parses a pubspec.yaml file and extracts dependencies
-func (parser *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error) {
+func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies bool) ([]shared.Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)

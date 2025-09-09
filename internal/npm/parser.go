@@ -17,7 +17,7 @@ func NewParser() *Parser {
 }
 
 // ParseDependencies parses a package.json file and extracts dependencies
-func (parser *Parser) ParseDependencies(filePath string) ([]shared.Dependency, error) {
+func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies bool) ([]shared.Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -44,8 +44,10 @@ func (parser *Parser) ParseDependencies(filePath string) ([]shared.Dependency, e
 			inSection = true
 			continue
 		} else if strings.Contains(trimmedLine, `"peerDependencies"`) && strings.Contains(trimmedLine, `:`) {
-			currentSection = shared.PeerDependencies
-			inSection = true
+			if includePeerDependencies {
+				currentSection = shared.PeerDependencies
+				inSection = true
+			}
 			continue
 		}
 
