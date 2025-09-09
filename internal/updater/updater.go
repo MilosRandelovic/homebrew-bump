@@ -11,7 +11,7 @@ import (
 
 // CheckOutdated checks which dependencies have newer versions available
 func CheckOutdated(dependencies []shared.Dependency, fileType string, verbose bool) ([]shared.OutdatedDependency, error) {
-	result, err := CheckOutdatedWithProgress(dependencies, fileType, verbose, false, nil)
+	result, err := CheckOutdatedWithProgress(dependencies, fileType, verbose, false, false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -19,11 +19,17 @@ func CheckOutdated(dependencies []shared.Dependency, fileType string, verbose bo
 }
 
 // CheckOutdatedWithProgress checks which dependencies have newer versions available with progress callback
-func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string, verbose bool, semver bool, progressCallback func(int, int)) (*shared.CheckResult, error) {
+func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string, verbose bool, semver bool, noCache bool, progressCallback func(int, int)) (*shared.CheckResult, error) {
 	var outdated []shared.OutdatedDependency
 	var errors []shared.DependencyError
 	var semverSkipped []shared.SemverSkipped
 	total := len(dependencies)
+
+	// Initialize cache if not disabled
+	var cache *shared.Cache
+	if !noCache {
+		cache = shared.NewCache()
+	}
 
 	// Get the appropriate registry client
 	registryClient, err := getRegistryClient(fileType)
@@ -67,7 +73,7 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 
 		// If semver flag is enabled and we have a prefixed version, get both versions in one call
 		if semver && shared.HasSemanticPrefix(dependency.OriginalVersion) {
-			absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, verbose)
+			absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, verbose, cache)
 			if err != nil {
 				// If constraint error, use the absolute latest already returned for semver skipped
 				if strings.Contains(err.Error(), "no versions satisfy the constraint") && absoluteLatest != "" {
@@ -96,7 +102,7 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 			if strings.Contains(dependency.Version, "-") {
 				// Current version is pre-release, so we need to check all versions including pre-releases
 				// Use the original version as constraint (even if it has no prefix)
-				absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, verbose)
+				absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, verbose, cache)
 				if err != nil {
 					// If constraint error for hardcoded pre-release, treat as up-to-date
 					if strings.Contains(err.Error(), "no versions satisfy the constraint") {
@@ -116,7 +122,7 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 				}
 			} else {
 				// Use absolute latest version fetching for stable versions (non-semver cases)
-				latestVersion, err = registryClient.GetLatestVersionFromRegistry(dependency.Name, dependency.HostedURL, verbose)
+				latestVersion, err = registryClient.GetLatestVersionFromRegistry(dependency.Name, dependency.HostedURL, verbose, cache)
 				if err != nil {
 					errors = append(errors, shared.DependencyError{
 						Name:  dependency.Name,
@@ -160,6 +166,15 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 				OriginalVersion: dependency.OriginalVersion,
 				Reason:          "incompatible with constraint",
 			})
+		}
+	}
+
+	// Save cache if it was used
+	if cache != nil {
+		// Clean expired entries before saving
+		cache.CleanExpiredEntries()
+		if err := cache.SaveEntries(); err != nil && verbose {
+			fmt.Printf("Warning: Could not save cache: %v\n", err)
 		}
 	}
 

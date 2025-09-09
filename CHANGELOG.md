@@ -2,6 +2,7 @@
 
 ## [1.1.0]
 
+- Use cache when running multiple bump commands in quick succession
 - Improved semver version handling
 - Fixed handling of pre-release versions
 - Console formatting improvements

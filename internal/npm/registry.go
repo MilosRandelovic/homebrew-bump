@@ -31,7 +31,18 @@ func NewRegistryClient() *RegistryClient {
 }
 
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
-func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
+func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool, cache *shared.Cache) (string, error) {
+	// Check cache first if enabled
+	if cache != nil {
+		key := shared.GenerateCacheKey(packageName, "npm", "", "*")
+		if entry, ok := cache.Get(key); ok {
+			if verbose {
+				fmt.Printf("Cache hit: %s\n", packageName)
+			}
+			return entry.AbsoluteLatest, nil
+		}
+	}
+
 	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
 	if err != nil {
 		return "", err
@@ -43,6 +54,19 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 	}
 
 	if latest, ok := packageInfo.DistTags["latest"]; ok {
+		// Cache the result if cache is enabled
+		if cache != nil {
+			entry := shared.CacheEntry{
+				PackageName:      packageName,
+				Type:             "npm",
+				CurrentVersion:   "",
+				Constraint:       "*",
+				AbsoluteLatest:   latest,
+				ConstraintLatest: latest,
+				Expiry:           time.Now().Add(10 * time.Minute),
+			}
+			cache.Set(entry)
+		}
 		return latest, nil
 	}
 
@@ -50,7 +74,18 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 }
 
 // GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
-func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (string, string, error) {
+func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool, cache *shared.Cache) (string, string, error) {
+	// Check cache first if enabled
+	if cache != nil {
+		key := shared.GenerateCacheKey(packageName, "npm", "", constraint)
+		if entry, ok := cache.Get(key); ok {
+			if verbose {
+				fmt.Printf("Cache hit: %s\n", packageName)
+			}
+			return entry.AbsoluteLatest, entry.ConstraintLatest, nil
+		}
+	}
+
 	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
 	if err != nil {
 		return "", "", err
@@ -70,7 +105,26 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 		}
 	}
 
-	return shared.FindBothLatestVersions(versions, constraint)
+	absoluteLatest, constraintLatest, err := shared.FindBothLatestVersions(versions, constraint)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Cache the result if cache is enabled
+	if cache != nil {
+		entry := shared.CacheEntry{
+			PackageName:      packageName,
+			Type:             "npm",
+			CurrentVersion:   "",
+			Constraint:       constraint,
+			AbsoluteLatest:   absoluteLatest,
+			ConstraintLatest: constraintLatest,
+			Expiry:           time.Now().Add(10 * time.Minute),
+		}
+		cache.Set(entry)
+	}
+
+	return absoluteLatest, constraintLatest, nil
 }
 
 // fetchPackageInfo is a shared method to fetch package information from registries

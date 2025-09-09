@@ -293,7 +293,7 @@ type MockRegistryClient struct {
 	packageVersions map[string][]string
 }
 
-func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
+func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool, cache *shared.Cache) (string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", fmt.Errorf("package not found")
@@ -301,7 +301,7 @@ func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, 
 	return versions[len(versions)-1], nil
 }
 
-func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (string, string, error) {
+func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool, cache *shared.Cache) (string, string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", "", fmt.Errorf("package not found")
@@ -357,7 +357,7 @@ func TestConstraintMatchesNoVersions(t *testing.T) {
 	}
 
 	// Test the scenario directly using the shared function
-	absoluteLatest, constraintLatest, err := mockRegistry.GetBothLatestVersions("core", "^0.0.1", "", false)
+	absoluteLatest, constraintLatest, err := mockRegistry.GetBothLatestVersions("core", "^0.0.1", "", false, nil)
 	if err == nil {
 		t.Fatal("Expected error for incompatible constraint, got nil")
 	}

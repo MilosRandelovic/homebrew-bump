@@ -38,6 +38,8 @@ func main() {
 		semverShort             = flag.Bool("s", false, "Respect semver constraints (^, ~) and skip hardcoded versions (shorthand)")
 		includePeerDependencies = flag.Bool("include-peers", false, "Include peer dependencies when updating")
 		includePeerShort        = flag.Bool("P", false, "Include peer dependencies when updating (shorthand)")
+		noCache                 = flag.Bool("no-cache", false, "Disable caching of registry lookups")
+		noCacheShort            = flag.Bool("C", false, "Disable caching of registry lookups (shorthand)")
 	)
 	flag.Parse()
 
@@ -48,7 +50,7 @@ func main() {
 	}
 
 	// Handle shorthand flags and track if any shorthand is used
-	usingShorthands := *updateShort || *verboseShort || *versionShort || *helpShort || *semverShort || *includePeerShort
+	usingShorthands := *updateShort || *verboseShort || *versionShort || *helpShort || *semverShort || *includePeerShort || *noCacheShort
 
 	// Declare flag strings based on shorthand usage
 	updateFlag := "-update"
@@ -78,6 +80,9 @@ func main() {
 	if *includePeerShort {
 		*includePeerDependencies = true
 	}
+	if *noCacheShort {
+		*noCache = true
+	}
 
 	if *showVersion {
 		fmt.Printf("bump version %s\n", version)
@@ -97,6 +102,7 @@ func main() {
 		fmt.Println("  -semver, -s         Respect semver constraints (^, ~) and skip hardcoded versions")
 		fmt.Println("  -include-peers, -P  Include peer dependencies when updating")
 		fmt.Println("  -verbose, -v        Enable verbose output")
+		fmt.Println("  -no-cache, -C       Disable caching of registry lookups")
 		fmt.Println("  -version, -V        Show version information")
 		fmt.Println("  -help, -h           Show this help")
 		fmt.Println("\nExamples:")
@@ -144,7 +150,7 @@ func main() {
 		}
 	}
 
-	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, *semver, progressCallback)
+	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, *semver, *noCache, progressCallback)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 		os.Exit(1)

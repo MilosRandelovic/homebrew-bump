@@ -27,7 +27,18 @@ func NewRegistryClient() *RegistryClient {
 }
 
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
-func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool) (string, error) {
+func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool, cache *shared.Cache) (string, error) {
+	// Check cache first if enabled
+	if cache != nil {
+		key := shared.GenerateCacheKey(packageName, "pub", "", "*")
+		if entry, ok := cache.Get(key); ok {
+			if verbose {
+				fmt.Printf("Cache hit: %s\n", packageName)
+			}
+			return entry.AbsoluteLatest, nil
+		}
+	}
+
 	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
 	if err != nil {
 		return "", err
@@ -38,11 +49,35 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 		return "", fmt.Errorf("failed to parse pub.dev response: %w", err)
 	}
 
+	// Cache the result if cache is enabled
+	if cache != nil {
+		entry := shared.CacheEntry{
+			PackageName:      packageName,
+			Type:             "pub",
+			CurrentVersion:   "",
+			Constraint:       "*",
+			AbsoluteLatest:   packageInfo.Latest.Version,
+			ConstraintLatest: packageInfo.Latest.Version,
+			Expiry:           time.Now().Add(10 * time.Minute),
+		}
+		cache.Set(entry)
+	}
 	return packageInfo.Latest.Version, nil
 }
 
 // GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
-func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool) (string, string, error) {
+func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool, cache *shared.Cache) (string, string, error) {
+	// Check cache first if enabled
+	if cache != nil {
+		key := shared.GenerateCacheKey(packageName, "pub", "", constraint)
+		if entry, ok := cache.Get(key); ok {
+			if verbose {
+				fmt.Printf("Cache hit: %s\n", packageName)
+			}
+			return entry.AbsoluteLatest, entry.ConstraintLatest, nil
+		}
+	}
+
 	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
 	if err != nil {
 		return "", "", err
@@ -64,7 +99,26 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 		versions = append(versions, versionInfo.Version)
 	}
 
-	return shared.FindBothLatestVersions(versions, constraint)
+	absoluteLatest, constraintLatest, err := shared.FindBothLatestVersions(versions, constraint)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Cache the result if cache is enabled
+	if cache != nil {
+		entry := shared.CacheEntry{
+			PackageName:      packageName,
+			Type:             "pub",
+			CurrentVersion:   "",
+			Constraint:       constraint,
+			AbsoluteLatest:   absoluteLatest,
+			ConstraintLatest: constraintLatest,
+			Expiry:           time.Now().Add(10 * time.Minute),
+		}
+		cache.Set(entry)
+	}
+
+	return absoluteLatest, constraintLatest, nil
 }
 
 // fetchPackageInfo is a shared method to fetch package information from registries
@@ -100,10 +154,6 @@ func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, 
 			}
 		}
 		url = fmt.Sprintf("%s/api/packages/%s", targetRegistry.URL, packageName)
-	}
-
-	if verbose {
-		fmt.Printf("Checking Dart package: %s (registry: %s)\n", packageName, targetRegistry.URL)
 	}
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}

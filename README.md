@@ -12,6 +12,7 @@ A Go utility that parses `package.json` and `pubspec.yaml` files to check and up
 - Optionally check for updates while respecting semver constraints
 - Optionally check for peer dependencies updates in `package.json`
 - Built in support for private registries and hosted packages
+- Uses cache when running multiple `bump` commands in quick succession
 
 ## Installation
 
