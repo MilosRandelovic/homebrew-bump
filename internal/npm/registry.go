@@ -21,7 +21,7 @@ type NpmPackageInfo struct {
 	DistTags map[string]string `json:"dist-tags"`
 	Versions map[string]struct {
 		Version    string `json:"version"`
-		Deprecated string `json:"deprecated,omitempty"`
+		Deprecated any    `json:"deprecated,omitempty"`
 	} `json:"versions"`
 }
 
@@ -64,8 +64,8 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 	// Get all non-deprecated versions
 	versions := make([]string, 0, len(packageInfo.Versions))
 	for version, versionInfo := range packageInfo.Versions {
-		// Skip deprecated versions
-		if versionInfo.Deprecated == "" {
+		// Include only non-deprecated versions (deprecated field is null/missing for non-deprecated)
+		if versionInfo.Deprecated == nil || versionInfo.Deprecated == "" {
 			versions = append(versions, version)
 		}
 	}

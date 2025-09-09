@@ -39,13 +39,6 @@ type SemverSkipped struct {
 	Reason          string
 }
 
-// SemanticVersion represents a parsed semantic version
-type SemanticVersion struct {
-	Major int
-	Minor int
-	Patch int
-}
-
 // SemverChange represents the type of version change
 type SemverChange int
 
