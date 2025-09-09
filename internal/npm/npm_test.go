@@ -21,6 +21,9 @@ func TestParsePackageJson(t *testing.T) {
 		},
 		"devDependencies": {
 			"typescript": ">=4.9.0"
+		},
+		"peerDependencies": {
+			"react-dom": "^18.0.0"
 		}
 	}`
 
@@ -35,8 +38,8 @@ func TestParsePackageJson(t *testing.T) {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
 
-	if len(dependencies) != 3 {
-		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
+	if len(dependencies) != 4 {
+		t.Errorf("Expected 4 dependencies, got %d", len(dependencies))
 	}
 
 	// Check specific dependencies - create maps for both clean and original versions
@@ -60,6 +63,10 @@ func TestParsePackageJson(t *testing.T) {
 		t.Errorf("Expected typescript clean version '4.9.0', got '%s'", cleanVersionMap["typescript"])
 	}
 
+	if cleanVersionMap["react-dom"] != "18.0.0" {
+		t.Errorf("Expected react-dom clean version '18.0.0', got '%s'", cleanVersionMap["react-dom"])
+	}
+
 	// Check original versions (with prefixes)
 	if originalVersionMap["react"] != "^18.0.0" {
 		t.Errorf("Expected react original version '^18.0.0', got '%s'", originalVersionMap["react"])
@@ -71,6 +78,73 @@ func TestParsePackageJson(t *testing.T) {
 
 	if originalVersionMap["typescript"] != ">=4.9.0" {
 		t.Errorf("Expected typescript original version '>=4.9.0', got '%s'", originalVersionMap["typescript"])
+	}
+
+	if originalVersionMap["react-dom"] != "^18.0.0" {
+		t.Errorf("Expected react-dom original version '^18.0.0', got '%s'", originalVersionMap["react-dom"])
+	}
+}
+
+func TestParsePeerDependencies(t *testing.T) {
+	// Create a temporary package.json file with only peer dependencies
+	tempDir := t.TempDir()
+	packageJsonPath := filepath.Join(tempDir, "package.json")
+
+	packageJsonContent := `{
+		"name": "test-package",
+		"version": "1.0.0",
+		"peerDependencies": {
+			"react": "^18.0.0",
+			"react-dom": "^18.0.0",
+			"@types/react": ">=18.0.0",
+			"lodash": "~4.17.20"
+		}
+	}`
+
+	err := os.WriteFile(packageJsonPath, []byte(packageJsonContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(packageJsonPath)
+	if err != nil {
+		t.Fatalf("Failed to parse package.json: %v", err)
+	}
+
+	if len(dependencies) != 4 {
+		t.Errorf("Expected 4 peer dependencies, got %d", len(dependencies))
+		for _, dep := range dependencies {
+			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+		}
+	}
+
+	// Create maps for easier testing
+	cleanVersionMap := make(map[string]string)
+	originalVersionMap := make(map[string]string)
+	for _, dep := range dependencies {
+		cleanVersionMap[dep.Name] = dep.Version
+		originalVersionMap[dep.Name] = dep.OriginalVersion
+	}
+
+	// Test peer dependency parsing
+	expectedDeps := map[string]struct {
+		cleanVersion    string
+		originalVersion string
+	}{
+		"react":        {"18.0.0", "^18.0.0"},
+		"react-dom":    {"18.0.0", "^18.0.0"},
+		"@types/react": {"18.0.0", ">=18.0.0"},
+		"lodash":       {"4.17.20", "~4.17.20"},
+	}
+
+	for name, expected := range expectedDeps {
+		if cleanVersionMap[name] != expected.cleanVersion {
+			t.Errorf("Expected %s clean version '%s', got '%s'", name, expected.cleanVersion, cleanVersionMap[name])
+		}
+		if originalVersionMap[name] != expected.originalVersion {
+			t.Errorf("Expected %s original version '%s', got '%s'", name, expected.originalVersion, originalVersionMap[name])
+		}
 	}
 }
 
@@ -94,6 +168,19 @@ func TestUpdatePackageJson(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
+	// First, parse dependencies to get line numbers
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(packageJsonPath)
+	if err != nil {
+		t.Fatalf("Failed to parse package.json: %v", err)
+	}
+
+	// Create a map to look up line numbers
+	lineNumbers := make(map[string]int)
+	for _, dep := range dependencies {
+		lineNumbers[dep.Name] = dep.LineNumber
+	}
+
 	// Mock outdated dependencies
 	outdated := []shared.OutdatedDependency{
 		{
@@ -101,17 +188,21 @@ func TestUpdatePackageJson(t *testing.T) {
 			CurrentVersion:  "18.0.0",
 			LatestVersion:   "18.2.0",
 			OriginalVersion: "^18.0.0",
+			Type:            shared.Dependencies,
+			LineNumber:      lineNumbers["react"],
 		},
 		{
 			Name:            "lodash",
 			CurrentVersion:  "4.17.20",
 			LatestVersion:   "4.17.21",
 			OriginalVersion: "~4.17.20",
+			Type:            shared.Dependencies,
+			LineNumber:      lineNumbers["lodash"],
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(packageJsonPath, outdated, false, false)
+	err = updater.UpdateDependencies(packageJsonPath, outdated, false, false, false)
 	if err != nil {
 		t.Fatalf("Failed to update package.json: %v", err)
 	}
@@ -235,14 +326,35 @@ func TestUpdatePreservesAllContent(t *testing.T) {
 
 	// Mock dependencies for update
 	deps := []shared.OutdatedDependency{
-		{Name: "react", CurrentVersion: "18.0.0", LatestVersion: "18.2.0", OriginalVersion: "^18.0.0"},
-		{Name: "axios", CurrentVersion: "1.4.0", LatestVersion: "1.5.0", OriginalVersion: "^1.4.0"},
-		{Name: "eslint", CurrentVersion: "8.45.0", LatestVersion: "8.47.0", OriginalVersion: "^8.45.0"},
+		{
+			Name:            "react",
+			CurrentVersion:  "18.0.0",
+			LatestVersion:   "18.2.0",
+			OriginalVersion: "^18.0.0",
+			Type:            shared.Dependencies,
+			LineNumber:      30, // "react": "^18.0.0",
+		},
+		{
+			Name:            "axios",
+			CurrentVersion:  "1.4.0",
+			LatestVersion:   "1.5.0",
+			OriginalVersion: "^1.4.0",
+			Type:            shared.Dependencies,
+			LineNumber:      32, // "axios": "^1.4.0",
+		},
+		{
+			Name:            "eslint",
+			CurrentVersion:  "8.45.0",
+			LatestVersion:   "8.47.0",
+			OriginalVersion: "^8.45.0",
+			Type:            shared.DevDependencies,
+			LineNumber:      39, // "eslint": "^8.45.0",
+		},
 	}
 
 	// Update the dependencies
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, false, false)
+	err = updater.UpdateDependencies(testFile, deps, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,6 +450,17 @@ func TestUpdatePreservesAllContent(t *testing.T) {
 			t.Errorf("Unchanged dependency missing: %s", dep)
 		}
 	}
+
+	// Note: PeerDependencies should remain unchanged by default.
+	// Only dependencies and devDependencies should be updated.
+	if !strings.Contains(updatedStr, `"react": "^18.2.0"`) {
+		t.Errorf("React dependency should be updated to ^18.2.0")
+	}
+
+	// Verify that peerDependencies remain unchanged
+	if !strings.Contains(updatedStr, `"react": ">=16.8.0"`) {
+		t.Errorf("PeerDependencies should remain unchanged when includePeerDependencies is false")
+	}
 }
 
 func TestGetFileType(t *testing.T) {
@@ -372,6 +495,9 @@ func TestParseScopedPackages(t *testing.T) {
 		"devDependencies": {
 			"@company/dev-tools": "~2.1.0",
 			"@babel/core": ">=7.22.0"
+		},
+		"peerDependencies": {
+			"@angular/common": "^16.0.0"
 		}
 	}`
 
@@ -386,9 +512,9 @@ func TestParseScopedPackages(t *testing.T) {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
 
-	// Should include all 6 dependencies including scoped ones
-	if len(dependencies) != 6 {
-		t.Errorf("Expected 6 dependencies, got %d", len(dependencies))
+	// Should include all 7 dependencies including scoped ones
+	if len(dependencies) != 7 {
+		t.Errorf("Expected 7 dependencies, got %d", len(dependencies))
 		for _, dep := range dependencies {
 			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
 		}
@@ -413,6 +539,7 @@ func TestParseScopedPackages(t *testing.T) {
 		"@types/node":          {"20.0.0", "^20.0.0"},
 		"@company/dev-tools":   {"2.1.0", "~2.1.0"},
 		"@babel/core":          {"7.22.0", ">=7.22.0"},
+		"@angular/common":      {"16.0.0", "^16.0.0"},
 	}
 
 	for name, expected := range expectedDeps {
@@ -454,23 +581,29 @@ func TestUpdateScopedPackages(t *testing.T) {
 			CurrentVersion:  "1.2.3",
 			LatestVersion:   "1.3.0",
 			OriginalVersion: "^1.2.3",
+			Type:            shared.Dependencies,
+			LineNumber:      4,
 		},
 		{
 			Name:            "@angular/core",
 			CurrentVersion:  "16.0.0",
 			LatestVersion:   "16.2.0",
 			OriginalVersion: "^16.0.0",
+			Type:            shared.Dependencies,
+			LineNumber:      5,
 		},
 		{
 			Name:            "@babel/core",
 			CurrentVersion:  "7.22.0",
 			LatestVersion:   "7.22.5",
 			OriginalVersion: ">=7.22.0",
+			Type:            shared.DevDependencies,
+			LineNumber:      9,
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(packageJsonPath, outdated, false, false)
+	err = updater.UpdateDependencies(packageJsonPath, outdated, false, false, false)
 	if err != nil {
 		t.Fatalf("Failed to update package.json: %v", err)
 	}
@@ -699,5 +832,93 @@ func TestGetAuthTokenForRegistry(t *testing.T) {
 			t.Errorf("For registry '%s', expected token '%s', got '%s'",
 				test.registryURL, test.expectedToken, actualToken)
 		}
+	}
+}
+
+// TestUpdateDuplicateDependenciesWithDifferentConstraints tests that when the same
+// dependency appears in multiple sections with different semver constraints,
+// each section preserves its own constraint prefix
+func TestUpdateDuplicateDependenciesWithDifferentConstraints(t *testing.T) {
+	packageJsonContent := `{
+  "name": "test-package",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.45.0"
+  },
+  "peerDependencies": {
+    "react": ">=16.0.0"
+  }
+}`
+
+	// Create a temporary test file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "package.json")
+
+	// Write the original content
+	err := os.WriteFile(testFile, []byte(packageJsonContent), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update both react dependencies (one in dependencies, one in peerDependencies)
+	deps := []shared.OutdatedDependency{
+		{
+			Name:            "react",
+			CurrentVersion:  "18.0.0",
+			LatestVersion:   "18.2.0",
+			OriginalVersion: "^18.0.0",
+			Type:            shared.Dependencies,
+			LineNumber:      5,
+		},
+		{
+			Name:            "react",
+			CurrentVersion:  "16.0.0",
+			LatestVersion:   "18.2.0",
+			OriginalVersion: ">=16.0.0",
+			Type:            shared.PeerDependencies,
+			LineNumber:      11,
+		},
+	}
+
+	updater := NewUpdater()
+	err = updater.UpdateDependencies(testFile, deps, false, false, true) // includePeerDependencies = true
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the updated content
+	updatedContent, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updatedStr := string(updatedContent)
+
+	// Verify that dependencies section has caret constraint preserved
+	if !strings.Contains(updatedStr, `"react": "^18.2.0"`) {
+		t.Errorf("Expected react in dependencies to be updated to '^18.2.0' with caret constraint preserved")
+	}
+
+	// Verify that peerDependencies section has >= constraint preserved
+	if !strings.Contains(updatedStr, `"react": ">=18.2.0"`) {
+		t.Errorf("Expected react in peerDependencies to be updated to '>=18.2.0' with >= constraint preserved")
+	}
+
+	// Verify both sections exist and have different versions
+	dependenciesMatch := strings.Contains(updatedStr, `"dependencies": {
+    "react": "^18.2.0"
+  }`)
+	peerDependenciesMatch := strings.Contains(updatedStr, `"peerDependencies": {
+    "react": ">=18.2.0"
+  }`)
+
+	if !dependenciesMatch {
+		t.Errorf("Dependencies section not correctly updated")
+	}
+	if !peerDependenciesMatch {
+		t.Errorf("PeerDependencies section not correctly updated")
 	}
 }
