@@ -92,17 +92,41 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 				continue
 			}
 		} else {
-			// Use absolute latest version fetching for non-semver cases
-			latestVersion, err = registryClient.GetLatestVersionFromRegistry(dependency.Name, dependency.HostedURL, verbose)
-			if err != nil {
-				errors = append(errors, shared.DependencyError{
-					Name:  dependency.Name,
-					Error: err.Error(),
-				})
-				if verbose {
-					fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
+			// Check if current version is pre-release to determine which method to use
+			if strings.Contains(dependency.Version, "-") {
+				// Current version is pre-release, so we need to check all versions including pre-releases
+				// Use the original version as constraint (even if it has no prefix)
+				absoluteLatest, latestVersion, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, verbose)
+				if err != nil {
+					// If constraint error for hardcoded pre-release, treat as up-to-date
+					if strings.Contains(err.Error(), "no versions satisfy the constraint") {
+						if verbose {
+							fmt.Printf("No newer versions found for pre-release: %s (%s)\n", dependency.Name, dependency.OriginalVersion)
+						}
+						continue
+					}
+					errors = append(errors, shared.DependencyError{
+						Name:  dependency.Name,
+						Error: err.Error(),
+					})
+					if verbose {
+						fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
+					}
+					continue
 				}
-				continue
+			} else {
+				// Use absolute latest version fetching for stable versions (non-semver cases)
+				latestVersion, err = registryClient.GetLatestVersionFromRegistry(dependency.Name, dependency.HostedURL, verbose)
+				if err != nil {
+					errors = append(errors, shared.DependencyError{
+						Name:  dependency.Name,
+						Error: err.Error(),
+					})
+					if verbose {
+						fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
+					}
+					continue
+				}
 			}
 			absoluteLatest = latestVersion // Same as latest when not using semver constraints
 		}
