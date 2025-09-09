@@ -156,6 +156,10 @@ func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, 
 		url = fmt.Sprintf("%s/api/packages/%s", targetRegistry.URL, packageName)
 	}
 
+	if verbose {
+		fmt.Printf("Checking PUB package: %s (registry: %s)\n", packageName, targetRegistry.URL)
+	}
+
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
