@@ -13,7 +13,7 @@ import (
 	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
 )
 
-const version = "1.0.2"
+const version = "1.1.0"
 
 // Color constants
 const (
