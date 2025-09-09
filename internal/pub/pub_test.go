@@ -138,17 +138,21 @@ dev_dependencies:
 			CurrentVersion:  "0.13.5",
 			LatestVersion:   "0.13.6",
 			OriginalVersion: "^0.13.5",
+			Type:            shared.Dependencies,
+			LineNumber:      5, // http: ^0.13.5
 		},
 		{
 			Name:            "path",
 			CurrentVersion:  "1.8.0",
 			LatestVersion:   "1.8.3",
 			OriginalVersion: "^1.8.0",
+			Type:            shared.Dependencies,
+			LineNumber:      6, // path: ^1.8.0
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(pubspecPath, outdated, false, false)
+	err = updater.UpdateDependencies(pubspecPath, outdated, false, false, false)
 	if err != nil {
 		t.Fatalf("Failed to update pubspec.yaml: %v", err)
 	}
@@ -363,14 +367,35 @@ custom_config:
 
 	// Mock dependencies for update
 	deps := []shared.OutdatedDependency{
-		{Name: "http", CurrentVersion: "0.13.0", LatestVersion: "0.13.5"},
-		{Name: "provider", CurrentVersion: "6.0.0", LatestVersion: "6.1.2"},
-		{Name: "build_runner", CurrentVersion: "2.4.0", LatestVersion: "2.4.7"},
+		{
+			Name:            "http",
+			CurrentVersion:  "0.13.0",
+			LatestVersion:   "0.13.5",
+			OriginalVersion: "^0.13.0",
+			Type:            shared.Dependencies,
+			LineNumber:      14, // http: ^0.13.0
+		},
+		{
+			Name:            "provider",
+			CurrentVersion:  "6.0.0",
+			LatestVersion:   "6.1.2",
+			OriginalVersion: "^6.0.0",
+			Type:            shared.Dependencies,
+			LineNumber:      17, // provider: ^6.0.0
+		},
+		{
+			Name:            "build_runner",
+			CurrentVersion:  "2.4.0",
+			LatestVersion:   "2.4.7",
+			OriginalVersion: "^2.4.0",
+			Type:            shared.DevDependencies,
+			LineNumber:      27, // build_runner: ^2.4.0
+		},
 	}
 
 	// Update the dependencies
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, false, false)
+	err = updater.UpdateDependencies(testFile, deps, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,6 +517,8 @@ dev_dependencies:
 			CurrentVersion:  "1.0.0",
 			LatestVersion:   "1.2.0",
 			OriginalVersion: "^1.0.0",
+			Type:            shared.Dependencies,
+			LineNumber:      12, // version: ^1.0.0
 			HostedURL:       "https://packages.company.com/pub",
 		},
 		{
@@ -499,6 +526,8 @@ dev_dependencies:
 			CurrentVersion:  "2.5.0",
 			LatestVersion:   "2.6.1",
 			OriginalVersion: "~2.5.0",
+			Type:            shared.Dependencies,
+			LineNumber:      17, // version: ~2.5.0
 			HostedURL:       "https://internal-registry.example.com/pub/",
 		},
 		{
@@ -506,11 +535,13 @@ dev_dependencies:
 			CurrentVersion:  "0.13.0",
 			LatestVersion:   "0.13.5",
 			OriginalVersion: "^0.13.0",
+			Type:            shared.Dependencies,
+			LineNumber:      7, // http: ^0.13.0
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(pubspecPath, outdated, false, false)
+	err = updater.UpdateDependencies(pubspecPath, outdated, false, false, false)
 	if err != nil {
 		t.Fatalf("Failed to update pubspec.yaml: %v", err)
 	}
@@ -645,10 +676,6 @@ func TestPubConfigIntegration(t *testing.T) {
   "version": 1,
   "hosted": [
     {
-      "url": "https://registry.api.hectre.com/pub/",
-      "token": "hectre_token_xyz"
-    },
-    {
       "url": "https://packages.company.com/pub",
       "token": "company_token_abc"
     }
@@ -683,10 +710,6 @@ func TestPubConfigIntegration(t *testing.T) {
 		url   string
 		token string
 	}{
-		"registry.api.hectre.com": {
-			url:   "https://registry.api.hectre.com/pub/",
-			token: "hectre_token_xyz",
-		},
 		"packages.company.com": {
 			url:   "https://packages.company.com/pub",
 			token: "company_token_abc",
@@ -704,5 +727,115 @@ func TestPubConfigIntegration(t *testing.T) {
 				t.Errorf("Expected token for %s to be '%s', got '%s'", hostname, expected.token, registry.AuthToken)
 			}
 		}
+	}
+}
+
+func TestUpdaterWithInvertedSectionOrder(t *testing.T) {
+	// Test pubspec.yaml with dev_dependencies before dependencies
+	pubspecContent := `name: test_package
+version: 1.0.0
+
+dev_dependencies:
+  test: ^1.21.0
+  mockito: ^5.3.0
+
+dependencies:
+  http: ^0.13.5
+  path: ^1.8.0
+
+flutter:
+  uses-material-design: true`
+
+	// Create temporary files for testing
+	tempDir := t.TempDir()
+	pubspecPath1 := filepath.Join(tempDir, "pubspec1.yaml")
+	pubspecPath2 := filepath.Join(tempDir, "pubspec2.yaml")
+
+	// Write content to both files
+	err := os.WriteFile(pubspecPath1, []byte(pubspecContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	err = os.WriteFile(pubspecPath2, []byte(pubspecContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	updater := &Updater{}
+
+	// Test updating a dependency in the dependencies section
+	deps := []shared.OutdatedDependency{
+		{
+			Name:            "http",
+			CurrentVersion:  "0.13.5",
+			LatestVersion:   "0.13.6",
+			OriginalVersion: "^0.13.5",
+			Type:            shared.Dependencies,
+			LineNumber:      9, // http: ^0.13.5
+		},
+	}
+
+	err = updater.UpdateDependencies(pubspecPath1, deps, false, false, false)
+	if err != nil {
+		t.Fatalf("Failed to update dependencies: %v", err)
+	}
+
+	// Read and verify the updated file
+	updated, err := os.ReadFile(pubspecPath1)
+	if err != nil {
+		t.Fatalf("Failed to read updated file: %v", err)
+	}
+	updatedStr := string(updated)
+
+	if !strings.Contains(updatedStr, "http: ^0.13.6") {
+		t.Errorf("Expected http dependency to be updated to ^0.13.6")
+	}
+
+	// Verify the old version is not present
+	if strings.Contains(updatedStr, "http: ^0.13.5") {
+		t.Errorf("Old http version ^0.13.5 should not be present")
+	}
+
+	// Test updating a dev dependency
+	devDeps := []shared.OutdatedDependency{
+		{
+			Name:            "test",
+			CurrentVersion:  "1.21.0",
+			LatestVersion:   "1.22.0",
+			OriginalVersion: "^1.21.0",
+			Type:            shared.DevDependencies,
+			LineNumber:      5, // test: ^1.21.0
+		},
+	}
+
+	err = updater.UpdateDependencies(pubspecPath2, devDeps, false, false, false)
+	if err != nil {
+		t.Fatalf("Failed to update dev dependencies: %v", err)
+	}
+
+	// Read and verify the updated file
+	updated2, err := os.ReadFile(pubspecPath2)
+	if err != nil {
+		t.Fatalf("Failed to read updated file: %v", err)
+	}
+	updated2Str := string(updated2)
+
+	if !strings.Contains(updated2Str, "test: ^1.22.0") {
+		t.Errorf("Expected test dev dependency to be updated to ^1.22.0")
+	}
+
+	// Verify the old version is not present
+	if strings.Contains(updated2Str, "test: ^1.21.0") {
+		t.Errorf("Old test version ^1.21.0 should not be present")
+	}
+
+	// Verify that updating dependencies section doesn't affect dev_dependencies section
+	if !strings.Contains(updatedStr, "test: ^1.21.0") {
+		t.Errorf("test dev dependency should remain unchanged when updating dependencies")
+	}
+
+	// Verify that updating dev_dependencies section doesn't affect dependencies section
+	if !strings.Contains(updated2Str, "http: ^0.13.5") {
+		t.Errorf("http dependency should remain unchanged when updating dev dependencies")
 	}
 }

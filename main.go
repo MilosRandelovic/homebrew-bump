@@ -26,16 +26,18 @@ const (
 
 func main() {
 	var (
-		update       = flag.Bool("update", false, "Update dependencies to latest versions")
-		updateShort  = flag.Bool("u", false, "Update dependencies to latest versions (shorthand)")
-		verbose      = flag.Bool("verbose", false, "Enable verbose output")
-		verboseShort = flag.Bool("v", false, "Enable verbose output (shorthand)")
-		showVersion  = flag.Bool("version", false, "Show version information")
-		versionShort = flag.Bool("V", false, "Show version information (shorthand)")
-		help         = flag.Bool("help", false, "Show help information")
-		helpShort    = flag.Bool("h", false, "Show help information (shorthand)")
-		semver       = flag.Bool("semver", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
-		semverShort  = flag.Bool("s", false, "Respect semver constraints (^, ~) and skip hardcoded versions (shorthand)")
+		update                  = flag.Bool("update", false, "Update dependencies to latest versions")
+		updateShort             = flag.Bool("u", false, "Update dependencies to latest versions (shorthand)")
+		verbose                 = flag.Bool("verbose", false, "Enable verbose output")
+		verboseShort            = flag.Bool("v", false, "Enable verbose output (shorthand)")
+		showVersion             = flag.Bool("version", false, "Show version information")
+		versionShort            = flag.Bool("V", false, "Show version information (shorthand)")
+		help                    = flag.Bool("help", false, "Show help information")
+		helpShort               = flag.Bool("h", false, "Show help information (shorthand)")
+		semver                  = flag.Bool("semver", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
+		semverShort             = flag.Bool("s", false, "Respect semver constraints (^, ~) and skip hardcoded versions (shorthand)")
+		includePeerDependencies = flag.Bool("include-peers", false, "Include peer dependencies when updating")
+		includePeerShort        = flag.Bool("P", false, "Include peer dependencies when updating (shorthand)")
 	)
 	flag.Parse()
 
@@ -46,7 +48,7 @@ func main() {
 	}
 
 	// Handle shorthand flags and track if any shorthand is used
-	usingShorthands := *updateShort || *verboseShort || *versionShort || *helpShort || *semverShort
+	usingShorthands := *updateShort || *verboseShort || *versionShort || *helpShort || *semverShort || *includePeerShort
 
 	// Declare flag strings based on shorthand usage
 	updateFlag := "-update"
@@ -73,6 +75,9 @@ func main() {
 	if *semverShort {
 		*semver = true
 	}
+	if *includePeerShort {
+		*includePeerDependencies = true
+	}
 
 	if *showVersion {
 		fmt.Printf("bump version %s\n", version)
@@ -88,17 +93,19 @@ func main() {
 		fmt.Println("  package.json  - NPM dependencies")
 		fmt.Println("  pubspec.yaml  - Dart/Flutter dependencies")
 		fmt.Println("\nOptions:")
-		fmt.Println("  -update, -u     Update dependencies to latest versions")
-		fmt.Println("  -semver, -s     Respect semver constraints (^, ~) and skip hardcoded versions")
-		fmt.Println("  -verbose, -v    Enable verbose output")
-		fmt.Println("  -version, -V    Show version information")
-		fmt.Println("  -help, -h       Show this help")
+		fmt.Println("  -update, -u         Update dependencies to latest versions")
+		fmt.Println("  -semver, -s         Respect semver constraints (^, ~) and skip hardcoded versions")
+		fmt.Println("  -include-peers, -P  Include peer dependencies when updating")
+		fmt.Println("  -verbose, -v        Enable verbose output")
+		fmt.Println("  -version, -V        Show version information")
+		fmt.Println("  -help, -h           Show this help")
 		fmt.Println("\nExamples:")
-		fmt.Println("  bump            # Check for outdated dependencies")
-		fmt.Println("  bump -update    # Update dependencies to latest versions")
-		fmt.Println("  bump -u -v      # Update with verbose output")
-		fmt.Println("  bump -s         # Check with semver constraints (^, ~)")
-		fmt.Println("  bump -u -s      # Update with semver constraints")
+		fmt.Println("  bump              # Check for outdated dependencies")
+		fmt.Println("  bump -update      # Update dependencies to latest versions")
+		fmt.Println("  bump -u -v        # Update with verbose output")
+		fmt.Println("  bump -s           # Check with semver constraints (^, ~)")
+		fmt.Println("  bump -u -s        # Update with semver constraints")
+		fmt.Println("  bump -u -P        # Update including peer dependencies")
 		os.Exit(0)
 	}
 
@@ -244,7 +251,7 @@ func main() {
 	// Update if requested
 	if *update {
 		if len(outdated) > 0 {
-			err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose, *semver)
+			err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose, *semver, *includePeerDependencies)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\nError updating dependencies: %v\n", err)
 				os.Exit(1)

@@ -141,6 +141,8 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 				LatestVersion:   latestVersion,
 				OriginalVersion: dependency.OriginalVersion,
 				HostedURL:       dependency.HostedURL,
+				Type:            dependency.Type,
+				LineNumber:      dependency.LineNumber,
 			})
 		}
 
@@ -169,12 +171,12 @@ func CheckOutdatedWithProgress(dependencies []shared.Dependency, fileType string
 }
 
 // UpdateDependencies updates the dependencies in the file
-func UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, fileType string, verbose bool, semver bool) error {
+func UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, fileType string, verbose bool, semver bool, includePeerDependencies bool) error {
 	updater, err := getUpdater(fileType)
 	if err != nil {
 		return err
 	}
-	return updater.UpdateDependencies(filePath, outdated, verbose, semver)
+	return updater.UpdateDependencies(filePath, outdated, verbose, semver, includePeerDependencies)
 }
 
 // getRegistryClient returns the appropriate registry client for the given file type

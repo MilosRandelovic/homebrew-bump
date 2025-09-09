@@ -6,17 +6,10 @@ import (
 	"strings"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
-	"gopkg.in/yaml.v3"
 )
 
 // Parser handles Dart pubspec.yaml parsing
 type Parser struct{}
-
-// PubspecYaml represents the structure of a pubspec.yaml file
-type PubspecYaml struct {
-	Dependencies    map[string]any `yaml:"dependencies,omitempty"`
-	DevDependencies map[string]any `yaml:"dev_dependencies,omitempty"`
-}
 
 // NewParser creates a new Dart parser
 func NewParser() *Parser {
@@ -30,144 +23,179 @@ func (parser *Parser) ParseDependencies(filePath string) ([]shared.Dependency, e
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var pubspec PubspecYaml
-	if err := yaml.Unmarshal(data, &pubspec); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-
+	lines := strings.Split(string(data), "\n")
 	var dependencies []shared.Dependency
 
-	// Parse regular dependencies
-	for name, versionInterface := range pubspec.Dependencies {
-		// Skip flutter SDK dependency
-		if name == "flutter" {
-			continue
-		}
+	// Track which section we're in
+	var currentSection shared.DependencyType
+	var inSection bool
+	var currentPackage *packageInfo
 
-		version := parseVersionFromInterface(versionInterface)
-		// Skip SDK dependencies, empty versions, 'any' versions, path, git dependencies
-		if version == "" || version == "any" || strings.HasPrefix(version, "sdk:") || strings.HasPrefix(version, "path:") || strings.HasPrefix(version, "git:") {
-			continue
-		}
+	for lineNumber, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
 
-		// Handle hosted packages
-		if strings.HasPrefix(version, "hosted:") {
-			dependency := parseHostedDependency(name, version)
-			if dependency != nil {
-				dependencies = append(dependencies, *dependency)
+		// Check if we're entering a dependency section
+		if strings.HasPrefix(trimmedLine, "dependencies:") {
+			// Finalize any pending package from previous section
+			if currentPackage != nil {
+				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+					dependencies = append(dependencies, *dependency)
+				}
 			}
+			currentSection = shared.Dependencies
+			inSection = true
+			currentPackage = nil
+			continue
+		} else if strings.HasPrefix(trimmedLine, "dev_dependencies:") {
+			// Finalize any pending package from previous section
+			if currentPackage != nil {
+				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+					dependencies = append(dependencies, *dependency)
+				}
+			}
+			currentSection = shared.DevDependencies
+			inSection = true
+			currentPackage = nil
 			continue
 		}
 
-		dependencies = append(dependencies, shared.Dependency{
-			Name:            name,
-			Version:         shared.CleanVersion(version),
-			OriginalVersion: version,
-		})
+		// Check if we're leaving a section (non-indented line that's not a comment)
+		if inSection && len(line) > 0 && line[0] != ' ' && line[0] != '\t' && trimmedLine != "" && !strings.HasPrefix(trimmedLine, "#") {
+			// Finalize any pending package
+			if currentPackage != nil {
+				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+					dependencies = append(dependencies, *dependency)
+				}
+				currentPackage = nil
+			}
+			inSection = false
+		}
+
+		// If we're in a section, look for dependency definitions
+		if inSection && len(line) > 0 && (line[0] == ' ' || line[0] == '\t') && !strings.HasPrefix(trimmedLine, "#") && strings.Contains(trimmedLine, ":") {
+			parts := strings.SplitN(trimmedLine, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+
+				// Check if this is a top-level package name (2 spaces indentation)
+				if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
+					// Finalize previous package if any
+					if currentPackage != nil {
+						if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+							dependencies = append(dependencies, *dependency)
+						}
+					}
+
+					// Start new package
+					currentPackage = &packageInfo{
+						name:       key,
+						lineNumber: lineNumber + 1,
+					}
+
+					if value != "" {
+						// Simple dependency (name: version)
+						currentPackage.version = cleanQuotes(value)
+					}
+				} else if strings.HasPrefix(line, "    ") {
+					// This is a sub-property of the current package (4+ spaces indentation)
+					if currentPackage != nil {
+						switch key {
+						case "version":
+							currentPackage.version = cleanQuotes(value)
+							currentPackage.versionLineNumber = lineNumber + 1
+						case "hosted":
+							currentPackage.hostedURL = cleanQuotes(value)
+						case "sdk":
+							currentPackage.sdk = value
+						}
+					}
+				}
+			}
+		}
 	}
 
-	// Parse dev dependencies
-	for name, versionInterface := range pubspec.DevDependencies {
-		version := parseVersionFromInterface(versionInterface)
-		// Skip SDK dependencies, empty versions, 'any' versions, path, git dependencies
-		if version == "" || version == "any" || strings.HasPrefix(version, "sdk:") || strings.HasPrefix(version, "path:") || strings.HasPrefix(version, "git:") {
-			continue
+	// Finalize any pending package
+	if currentPackage != nil {
+		if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+			dependencies = append(dependencies, *dependency)
 		}
-
-		// Handle hosted packages
-		if strings.HasPrefix(version, "hosted:") {
-			dependency := parseHostedDependency(name, version)
-			if dependency != nil {
-				dependencies = append(dependencies, *dependency)
-			}
-			continue
-		}
-
-		dependencies = append(dependencies, shared.Dependency{
-			Name:            name,
-			Version:         shared.CleanVersion(version),
-			OriginalVersion: version,
-		})
 	}
 
 	return dependencies, nil
 }
 
-// parseHostedDependency parses a hosted dependency string and creates a Dependency
-func parseHostedDependency(name, hostedVersion string) *shared.Dependency {
-	// hostedVersion format: "hosted:URL|VERSION" or "hosted:complex_data"
-	if !strings.HasPrefix(hostedVersion, "hosted:") {
+// packageInfo holds information about a package being parsed
+type packageInfo struct {
+	name              string
+	version           string
+	hostedURL         string
+	sdk               string
+	lineNumber        int
+	versionLineNumber int
+}
+
+// toDependency converts packageInfo to shared.Dependency if it should be included
+func (pkg *packageInfo) toDependency(section shared.DependencyType) *shared.Dependency {
+	// Skip SDK dependencies
+	if pkg.sdk != "" {
 		return nil
 	}
 
-	withoutPrefix := strings.TrimPrefix(hostedVersion, "hosted:")
-	parts := strings.SplitN(withoutPrefix, "|", 2)
-
-	if len(parts) == 2 {
-		// Format: "hosted:URL|VERSION"
-		hostedURL := parts[0]
-		version := parts[1]
-
-		return &shared.Dependency{
-			Name:            name,
-			Version:         shared.CleanVersion(version),
-			OriginalVersion: version,
-			HostedURL:       hostedURL,
-		}
-	} else if len(parts) == 1 {
-		// Format: "hosted:URL" (version might be missing)
-		hostedURL := parts[0]
-
-		return &shared.Dependency{
-			Name:            name,
-			Version:         "",
-			OriginalVersion: "",
-			HostedURL:       hostedURL,
-		}
+	if !shouldIncludeDependency(pkg.name, pkg.version) {
+		return nil
 	}
 
-	// For other hosted formats, we don't currently support version extraction
-	return nil
+	// Use version line number if available, otherwise use package line number
+	lineNum := pkg.lineNumber
+	if pkg.versionLineNumber > 0 {
+		lineNum = pkg.versionLineNumber
+	}
+
+	dependency := &shared.Dependency{
+		Name:            pkg.name,
+		Version:         shared.CleanVersion(pkg.version),
+		OriginalVersion: pkg.version,
+		Type:            section,
+		LineNumber:      lineNum,
+	}
+
+	// Set hosted URL for non-pub.dev hosted packages
+	if pkg.hostedURL != "" && !strings.Contains(pkg.hostedURL, "pub.dev") {
+		dependency.HostedURL = pkg.hostedURL
+	}
+
+	return dependency
 }
 
-// parseVersionFromInterface extracts version string from interface{}
-// Handles both string versions ("^1.0.0") and map versions (git dependencies, etc.)
-func parseVersionFromInterface(versionInterface interface{}) string {
-	switch versionValue := versionInterface.(type) {
-	case string:
-		return versionValue
-	case map[string]any:
-		// Skip SDK dependencies
-		if sdk, ok := versionValue["sdk"]; ok {
-			return fmt.Sprintf("sdk:%v", sdk)
-		}
-		// Handle hosted packages
-		if hosted, ok := versionValue["hosted"]; ok {
-			// For hosted packages, extract the registry URL and version
-			hostedURL := fmt.Sprintf("%v", hosted)
-
-			// Extract the version
-			if version, hasVersion := versionValue["version"]; hasVersion {
-				versionStr := fmt.Sprintf("%v", version)
-				// Include hosted URL information for processing
-				if hostedURL != "" && !strings.Contains(hostedURL, "pub.dev") {
-					return fmt.Sprintf("hosted:%s|%s", hostedURL, versionStr)
-				}
-				return versionStr
-			}
-			return fmt.Sprintf("hosted:%v", hosted)
-		}
-		// Handle git dependencies or other complex version specifications
-		if path, ok := versionValue["path"]; ok {
-			return fmt.Sprintf("path:%v", path)
-		}
-		if git, ok := versionValue["git"]; ok {
-			return fmt.Sprintf("git:%v", git)
-		}
-		return "complex"
-	default:
-		return ""
+// cleanQuotes removes surrounding quotes from a string
+func cleanQuotes(s string) string {
+	s = strings.TrimSpace(s)
+	if (strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`)) ||
+		(strings.HasPrefix(s, `'`) && strings.HasSuffix(s, `'`)) {
+		return s[1 : len(s)-1]
 	}
+	return s
+}
+
+// shouldIncludeDependency checks if a dependency should be included
+func shouldIncludeDependency(name, version string) bool {
+	// Skip flutter SDK dependency
+	if name == "flutter" {
+		return false
+	}
+
+	// Skip if no version
+	if version == "" {
+		return false
+	}
+
+	// Skip 'any' versions, SDK dependencies, path, git dependencies
+	if version == "any" || strings.HasPrefix(version, "sdk:") || strings.HasPrefix(version, "path:") || strings.HasPrefix(version, "git:") {
+		return false
+	}
+
+	return true
 }
 
 // GetFileType returns the file type this parser handles

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
@@ -16,68 +17,70 @@ func NewUpdater() *Updater {
 	return &Updater{}
 }
 
-// UpdateDependencies updates dependencies in a pubspec.yaml file using string replacement
-func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool) error {
+// UpdateDependencies updates dependencies in a pubspec.yaml file using line-based updates
+func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool, includePeerDependencies bool) error {
+	// Pub ecosystem doesn't support peer dependencies
+	if includePeerDependencies {
+		return fmt.Errorf("peer dependencies are not supported by pub")
+	}
+
+	// If no dependencies to update, return early
+	if len(outdated) == 0 {
+		return nil
+	}
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
-	content := string(data)
+	// Split content into lines
+	lines := strings.Split(string(data), "\n")
 
-	// Update each outdated dependency
+	// Update each dependency by modifying its specific line
 	for _, dependency := range outdated {
-		var updated bool
+		if dependency.LineNumber < 1 || dependency.LineNumber > len(lines) {
+			return fmt.Errorf("invalid line number %d for dependency %s", dependency.LineNumber, dependency.Name)
+		}
 
-		// For hosted packages, look for the version field within the hosted package block
+		lineIndex := dependency.LineNumber - 1 // Convert to 0-based index
+		line := lines[lineIndex]
+
+		// Simple regex to replace the version on this specific line
+		// For hosted packages, this will be the "version: ^x.y.z" line
+		// For simple packages, this will be the "package-name: ^x.y.z" line
+		var pattern string
 		if dependency.HostedURL != "" {
-			// Pattern for hosted packages: look for version field after the package name
-			hostedPattern := fmt.Sprintf(`(\s+%s:\s*\n(?:\s+hosted:[^\n]+\n)?\s+version:\s*)([^\s\n]+)`, regexp.QuoteMeta(dependency.Name))
-			hostedRe := regexp.MustCompile(hostedPattern)
-
-			matches := hostedRe.FindStringSubmatch(content)
-			if len(matches) >= 3 {
-				currentVersionInFile := matches[2]
-				prefix := shared.GetVersionPrefix(currentVersionInFile)
-				newVersion := prefix + dependency.LatestVersion
-
-				replacement := matches[1] + newVersion
-				content = hostedRe.ReplaceAllString(content, replacement)
-				updated = true
-
-				if verbose {
-					fmt.Printf("Updated %s: %s -> %s\n", dependency.Name, currentVersionInFile, newVersion)
-				}
-			}
+			// For hosted packages, match the version line
+			pattern = `(\s*version\s*:\s*)([^\s#]+)`
+		} else {
+			// For simple packages, match the package name line
+			escapedName := regexp.QuoteMeta(dependency.Name)
+			pattern = fmt.Sprintf(`(\s*%s\s*:\s*)([^\s#]+)`, escapedName)
 		}
 
-		// If not updated yet, try the simple pattern for regular dependencies
-		if !updated {
-			oldVersionPattern := fmt.Sprintf(`(\s+%s:\s*)([^\s\n]+)`, regexp.QuoteMeta(dependency.Name))
-			versionRegex := regexp.MustCompile(oldVersionPattern)
+		versionRegex := regexp.MustCompile(pattern)
+		matches := versionRegex.FindStringSubmatch(line)
 
-			matches := versionRegex.FindStringSubmatch(content)
-			if len(matches) >= 3 {
-				currentVersionInFile := matches[2]
-				prefix := shared.GetVersionPrefix(currentVersionInFile)
-				newVersion := prefix + dependency.LatestVersion
-
-				replacement := matches[1] + newVersion
-				content = versionRegex.ReplaceAllString(content, replacement)
-				updated = true
-
-				if verbose {
-					fmt.Printf("Updated %s: %s -> %s\n", dependency.Name, currentVersionInFile, newVersion)
-				}
-			}
+		if len(matches) < 3 {
+			return fmt.Errorf("could not find %s on line %d for updating", dependency.Name, dependency.LineNumber)
 		}
 
-		if !updated && verbose {
-			fmt.Printf("Warning: Could not find %s in file for updating\n", dependency.Name)
+		oldVersion := matches[2]
+		prefix := shared.GetVersionPrefix(oldVersion)
+		newVersion := prefix + dependency.LatestVersion
+
+		// Replace the version on this line
+		newLine := versionRegex.ReplaceAllString(line, fmt.Sprintf(`${1}%s`, newVersion))
+		lines[lineIndex] = newLine
+
+		if verbose {
+			fmt.Printf("Updated %s (%s): %s -> %s\n", dependency.Name, dependency.Type.String(), oldVersion, newVersion)
 		}
 	}
 
-	// Write the updated content back to file
+	// Join lines back together and write to file
+	content := strings.Join(lines, "\n")
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
