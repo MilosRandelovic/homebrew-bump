@@ -13,7 +13,7 @@ import (
 	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
 )
 
-const version = "1.1.0"
+const version = "1.1.1"
 
 // Color constants
 const (
@@ -130,7 +130,7 @@ func main() {
 	}
 
 	// Parse the file
-	dependencies, err := parser.ParseDependencies(filePath, fileType)
+	dependencies, err := parser.ParseDependencies(filePath, fileType, *includePeerDependencies)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing file: %v\n", err)
 		os.Exit(1)

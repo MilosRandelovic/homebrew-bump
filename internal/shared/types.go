@@ -79,7 +79,7 @@ const (
 
 // Parser interface defines the contract for parsing dependencies from files
 type Parser interface {
-	ParseDependencies(filePath string) ([]Dependency, error)
+	ParseDependencies(filePath string, includePeerDependencies bool) ([]Dependency, error)
 	GetFileType() string
 }
 

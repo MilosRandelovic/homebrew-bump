@@ -1,5 +1,9 @@
 # Change Log
 
+## [1.1.1]
+
+- Fixed peer dependency handling
+
 ## [1.1.0]
 
 - Use cache when running multiple bump commands in quick succession

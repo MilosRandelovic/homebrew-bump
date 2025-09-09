@@ -39,7 +39,7 @@ dev_dependencies:
 	}
 
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(pubspecPath)
+	dependencies, err := parser.ParseDependencies(pubspecPath, false)
 	if err != nil {
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
@@ -241,7 +241,7 @@ dependencies:
 	}
 
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(pubspecPath)
+	dependencies, err := parser.ParseDependencies(pubspecPath, false)
 	if err != nil {
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}

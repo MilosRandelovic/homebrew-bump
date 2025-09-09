@@ -9,12 +9,12 @@ import (
 )
 
 // ParseDependencies parses dependencies from a file based on its type
-func ParseDependencies(filePath, fileType string) ([]shared.Dependency, error) {
+func ParseDependencies(filePath, fileType string, includePeerDependencies bool) ([]shared.Dependency, error) {
 	parser, err := getParser(fileType)
 	if err != nil {
 		return nil, err
 	}
-	return parser.ParseDependencies(filePath)
+	return parser.ParseDependencies(filePath, includePeerDependencies)
 }
 
 // getParser returns the appropriate parser for the given file type

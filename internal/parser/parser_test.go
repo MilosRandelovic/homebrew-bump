@@ -28,7 +28,7 @@ func TestParsePackageJson(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	dependencies, err := ParseDependencies(packageJsonPath, "npm")
+	dependencies, err := ParseDependencies(packageJsonPath, "npm", false)
 	if err != nil {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
@@ -97,7 +97,7 @@ dev_dependencies:
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	dependencies, err := ParseDependencies(pubspecPath, "pub")
+	dependencies, err := ParseDependencies(pubspecPath, "pub", false)
 	if err != nil {
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}

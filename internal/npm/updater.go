@@ -23,29 +23,8 @@ func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.Ou
 		fmt.Printf("\n") // Add space before updates in verbose mode
 	}
 
-	// Filter dependencies based on includePeerDependencies flag
-	var dependenciesToUpdate []shared.OutdatedDependency
-	var skippedPeerDependencies []shared.OutdatedDependency
-
-	for _, dependency := range outdated {
-		if dependency.Type == shared.PeerDependencies && !includePeerDependencies {
-			skippedPeerDependencies = append(skippedPeerDependencies, dependency)
-			continue
-		}
-		dependenciesToUpdate = append(dependenciesToUpdate, dependency)
-	}
-
-	// Inform about skipped peer dependencies
-	if verbose && len(skippedPeerDependencies) > 0 {
-		fmt.Printf("Skipping peer dependencies (use --include-peer-dependencies to update):\n")
-		for _, dep := range skippedPeerDependencies {
-			fmt.Printf("  %s: %s -> %s (peer dependency)\n", dep.Name, dep.CurrentVersion, dep.LatestVersion)
-		}
-		fmt.Printf("\n")
-	}
-
 	// If no dependencies to update, return early
-	if len(dependenciesToUpdate) == 0 {
+	if len(outdated) == 0 {
 		return nil
 	}
 
@@ -58,7 +37,7 @@ func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.Ou
 	lines := strings.Split(string(data), "\n")
 
 	// Update each dependency by modifying its specific line
-	for _, dependency := range dependenciesToUpdate {
+	for _, dependency := range outdated {
 		if dependency.LineNumber < 1 || dependency.LineNumber > len(lines) {
 			return fmt.Errorf("invalid line number %d for dependency %s", dependency.LineNumber, dependency.Name)
 		}
