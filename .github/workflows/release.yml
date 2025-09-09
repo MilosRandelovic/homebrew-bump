@@ -22,7 +22,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.24'
+        go-version: '1.25'
 
     - name: Install dependencies
       run: go mod download
@@ -114,5 +114,5 @@ jobs:
           - Updated SHA256 hash
 
           This PR was automatically created by the release workflow.
-        branch: feature/update_formula_${{ steps.version.outputs.tag }}
+        branch: release/update_formula_${{ steps.version.outputs.tag }}
         delete-branch: true
