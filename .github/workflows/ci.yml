@@ -7,6 +7,8 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    # Skip CI for automated release formula update PRs
+    if: "!startsWith(github.head_ref, 'release/update_formula_')"
     steps:
     - uses: actions/checkout@v4
 
