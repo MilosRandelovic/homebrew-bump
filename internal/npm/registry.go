@@ -13,10 +13,10 @@ import (
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
-// RegistryClient handles NPM registry operations
+// RegistryClient handles npm registry operations
 type RegistryClient struct{}
 
-// NpmPackageInfo represents the response from NPM registry
+// NpmPackageInfo represents the response from npm registry
 type NpmPackageInfo struct {
 	DistTags map[string]string `json:"dist-tags"`
 	Versions map[string]struct {
@@ -25,7 +25,7 @@ type NpmPackageInfo struct {
 	} `json:"versions"`
 }
 
-// NewRegistryClient creates a new NPM registry client
+// NewRegistryClient creates a new npm registry client
 func NewRegistryClient() *RegistryClient {
 	return &RegistryClient{}
 }
@@ -50,7 +50,7 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 
 	var packageInfo NpmPackageInfo
 	if err := json.Unmarshal(body, &packageInfo); err != nil {
-		return "", fmt.Errorf("failed to parse NPM response: %w", err)
+		return "", fmt.Errorf("failed to parse npm response: %w", err)
 	}
 
 	if latest, ok := packageInfo.DistTags["latest"]; ok {
@@ -93,7 +93,7 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 
 	var packageInfo NpmPackageInfo
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&packageInfo); err != nil {
-		return "", "", fmt.Errorf("failed to parse NPM response: %w", err)
+		return "", "", fmt.Errorf("failed to parse npm response: %w", err)
 	}
 
 	// Get all non-deprecated versions
@@ -151,7 +151,7 @@ func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, 
 	url := fmt.Sprintf("%s/%s", targetRegistryURL, packageName)
 
 	if verbose {
-		fmt.Printf("Checking NPM package: %s (registry: %s)\n", packageName, targetRegistryURL)
+		fmt.Printf("Checking npm package: %s (registry: %s)\n", packageName, targetRegistryURL)
 	}
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}

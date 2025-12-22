@@ -4,7 +4,7 @@ A Go utility that parses `package.json` and `pubspec.yaml` files to check and up
 
 ## Features
 
-- Parse `package.json` files (NPM dependencies)
+- Parse `package.json` files (npm dependencies)
 - Parse `pubspec.yaml` files (Dart/Flutter pub dependencies)
 - Check for outdated dependencies
 - Update dependencies to their latest versions
@@ -47,7 +47,7 @@ bump
 ### Update dependencies to latest versions
 
 ```bash
-bump -update
+bump --update
 # or
 bump -u
 ```
@@ -55,7 +55,7 @@ bump -u
 ### Respect semver constraints
 
 ```bash
-bump -semver
+bump --semver
 # or
 bump -s
 ```
@@ -69,52 +69,55 @@ This mode will:
 ### Enable verbose output
 
 ```bash
-bump -verbose
+bump --verbose
 # or
 bump -v
 ```
 
 ### Combine options
 
+You can merge shorthand flags for concise commands:
+
 ```bash
-bump -update -verbose
-# or
-bump -u -v
+# Update with verbose output
+bump -uv
 
 # Update with semver constraints
-bump -update -semver
+bump --update --semver
 # or
-bump -u -s
+bump -us
 
 # Check with semver constraints and verbose output
-bump -semver -verbose
-# or
-bump -s -v
+bump -sv
 ```
 
 ### Show version
 
 ```bash
-bump -version
+bump --version
 # or
 bump -V
 ```
 
 ## Command Line Options
 
-- `-update, -u`: Update dependencies to latest versions
-- `-semver, -s`: Respect semver constraints (^, ~) and skip hardcoded versions
-- `-verbose, -v`: Enable verbose output
-- `-version, -V`: Show version information
-- `-help, -h`: Show help information
+- `--update, -u`: Update dependencies to latest versions
+- `--semver, -s`: Respect semver constraints (^, ~) and skip hardcoded versions
+- `--verbose, -v`: Enable verbose output
+- `--include-peers, -P`: Include peer dependencies when updating (npm only)
+- `--no-cache, -C`: Disable caching of registry lookups
+- `--version, -V`: Show version information
+- `--help, -h`: Show help information
+
+**Note:** Long-form flags use double dashes (`--update`), shorthand flags use single dash (`-u`). Shorthand flags can be merged (e.g., `-us` for update with semver).
 
 ## Supported File Types
 
-### package.json (NPM)
+### package.json (npm)
 
 - Regular dependencies
 - Dev dependencies
-- Fetches latest versions from NPM registry
+- Fetches latest versions from npm registry
 
 ### pubspec.yaml (Dart/Flutter)
 
@@ -160,8 +163,15 @@ dev_dependencies:
 The project is organized into the following packages:
 
 - `main.go`: CLI interface and application entry point
-- `internal/parser`: Handles parsing of package.json and pubspec.yaml files
+- `internal/cli`: CLI-specific functionality (help text)
+- `internal/display`: Output formatting and color-coded display
+- `internal/parser`: Handles parsing and file detection for package.json and pubspec.yaml
 - `internal/updater`: Handles checking for updates and updating dependency files
+- `internal/shared`: Common types, utilities, and interfaces
+- `internal/npm`: npm-specific registry client and configuration
+- `internal/pub`: Dart/Flutter pub-specific registry client and configuration
+
+The CLI uses [spf13/pflag](https://github.com/spf13/pflag) for POSIX-compliant flag parsing with support for both long-form (`--flag`) and shorthand (`-f`) options, including merged shorthands (`-us`).
 
 ## Contributing
 

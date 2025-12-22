@@ -2,7 +2,7 @@
 
 ## Project Context
 
-This is a Go CLI tool called "bump" that manages dependency updates for NPM (package.json) and Dart/Flutter PUB (pubspec.yaml) projects. It supports semver constraints, private registries, hosted packages, and provides both checking and  updating capabilities.
+This is a Go CLI tool called "bump" that manages dependency updates for npm (package.json) and Dart/Flutter PUB (pubspec.yaml) projects. It supports semver constraints, private registries, hosted packages, and provides both checking and  updating capabilities.
 
 The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (referenced in the `Formula` folder), but should always be built as `bump`.
 
@@ -78,7 +78,7 @@ internal/
 ├── shared/           # Common types, version utilities, interfaces
 ├── parser/           # Auto-detection and delegation
 ├── updater/          # Core update checking logic
-├── npm/              # NPM ecosystem (package.json, .npmrc, npm registry)
+├── npm/              # npm ecosystem (package.json, .npmrc, npm registry)
 └── pub/              # Dart/Flutter PUB ecosystem (pubspec.yaml, pub-tokens.json, pub registry)
 ```
 

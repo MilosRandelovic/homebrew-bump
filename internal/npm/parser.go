@@ -8,10 +8,10 @@ import (
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
-// Parser handles NPM package.json parsing
+// Parser handles npm package.json parsing
 type Parser struct{}
 
-// NewParser creates a new NPM parser
+// NewParser creates a new npm parser
 func NewParser() *Parser {
 	return &Parser{}
 }

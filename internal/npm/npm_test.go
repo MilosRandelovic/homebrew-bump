@@ -634,7 +634,7 @@ func TestParseNpmrcFile(t *testing.T) {
 	tempDir := t.TempDir()
 	npmrcPath := filepath.Join(tempDir, ".npmrc")
 
-	npmrcContent := `# NPM configuration
+	npmrcContent := `# npm configuration
 registry=https://registry.npmjs.org/
 @company:registry=https://npm.company.com
 @internal:registry=https://internal-registry.example.com/

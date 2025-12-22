@@ -45,13 +45,13 @@ func NewCache() *Cache {
 	return cache
 }
 
-func generateCacheKey(pkg, packageType, current, constraint string) string {
-	return fmt.Sprintf("%s|%s|%s|%s", pkg, packageType, current, constraint)
+func generateCacheKey(packageName, packageType, current, constraint string) string {
+	return fmt.Sprintf("%s|%s|%s|%s", packageName, packageType, current, constraint)
 }
 
 // GenerateCacheKey is the exported version of generateCacheKey
-func GenerateCacheKey(pkg, packageType, current, constraint string) string {
-	return generateCacheKey(pkg, packageType, current, constraint)
+func GenerateCacheKey(packageName, packageType, current, constraint string) string {
+	return generateCacheKey(packageName, packageType, current, constraint)
 }
 
 func (c *Cache) LoadEntries() error {
