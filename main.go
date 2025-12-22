@@ -1,87 +1,35 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
+	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/MilosRandelovic/homebrew-bump/internal/parser"
-	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
+	"github.com/spf13/pflag"
 )
 
-const version = "1.1.1"
-
-// Color constants
-const (
-	ColorReset  = "\033[0m"
-	ColorRed    = "\033[31m" // Major version changes
-	ColorYellow = "\033[33m" // Minor version changes
-	ColorGreen  = "\033[32m" // Patch version changes
-	ColorCyan   = "\033[36m" // Package names
-)
+const version = "1.2.0"
 
 func main() {
 	var (
-		update                  = flag.Bool("update", false, "Update dependencies to latest versions")
-		updateShort             = flag.Bool("u", false, "Update dependencies to latest versions (shorthand)")
-		verbose                 = flag.Bool("verbose", false, "Enable verbose output")
-		verboseShort            = flag.Bool("v", false, "Enable verbose output (shorthand)")
-		showVersion             = flag.Bool("version", false, "Show version information")
-		versionShort            = flag.Bool("V", false, "Show version information (shorthand)")
-		help                    = flag.Bool("help", false, "Show help information")
-		helpShort               = flag.Bool("h", false, "Show help information (shorthand)")
-		semver                  = flag.Bool("semver", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
-		semverShort             = flag.Bool("s", false, "Respect semver constraints (^, ~) and skip hardcoded versions (shorthand)")
-		includePeerDependencies = flag.Bool("include-peers", false, "Include peer dependencies when updating")
-		includePeerShort        = flag.Bool("P", false, "Include peer dependencies when updating (shorthand)")
-		noCache                 = flag.Bool("no-cache", false, "Disable caching of registry lookups")
-		noCacheShort            = flag.Bool("C", false, "Disable caching of registry lookups (shorthand)")
+		update                  = pflag.BoolP("update", "u", false, "Update dependencies to latest versions")
+		verbose                 = pflag.BoolP("verbose", "v", false, "Enable verbose output")
+		showVersion             = pflag.BoolP("version", "V", false, "Show version information")
+		help                    = pflag.BoolP("help", "h", false, "Show help information")
+		semver                  = pflag.BoolP("semver", "s", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
+		includePeerDependencies = pflag.BoolP("include-peers", "P", false, "Include peer dependencies when updating")
+		noCache                 = pflag.BoolP("no-cache", "C", false, "Disable caching of registry lookups")
 	)
-	flag.Parse()
+	pflag.Parse()
 
 	// Check for any remaining arguments that weren't parsed as flags
-	if flag.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "Error: Unknown arguments: %v\nRun 'bump -help' for usage information.\n", flag.Args())
+	if pflag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "Error: Unknown arguments: %v\nRun 'bump --help' for usage information.\n", pflag.Args())
 		os.Exit(1)
-	}
-
-	// Handle shorthand flags and track if any shorthand is used
-	usingShorthands := *updateShort || *verboseShort || *versionShort || *helpShort || *semverShort || *includePeerShort || *noCacheShort
-
-	// Declare flag strings based on shorthand usage
-	updateFlag := "-update"
-	semverFlag := "-semver"
-	verboseFlag := "-verbose"
-	if usingShorthands {
-		updateFlag = "-u"
-		semverFlag = "-s"
-		verboseFlag = "-v"
-	}
-
-	if *updateShort {
-		*update = true
-	}
-	if *verboseShort {
-		*verbose = true
-	}
-	if *versionShort {
-		*showVersion = true
-	}
-	if *helpShort {
-		*help = true
-	}
-	if *semverShort {
-		*semver = true
-	}
-	if *includePeerShort {
-		*includePeerDependencies = true
-	}
-	if *noCacheShort {
-		*noCache = true
 	}
 
 	if *showVersion {
@@ -90,40 +38,16 @@ func main() {
 	}
 
 	if *help {
-		fmt.Printf("bump v%s - A utility to check and update dependencies\n\n", version)
-		fmt.Println("Usage: bump [options]")
-		fmt.Println("\nAuto-detects package.json or pubspec.yaml in current directory")
-		fmt.Println("Automatically checks for outdated dependencies")
-		fmt.Println("\nSupported files:")
-		fmt.Println("  package.json  - NPM dependencies")
-		fmt.Println("  pubspec.yaml  - Dart/Flutter dependencies")
-		fmt.Println("\nOptions:")
-		fmt.Println("  -update, -u         Update dependencies to latest versions")
-		fmt.Println("  -semver, -s         Respect semver constraints (^, ~) and skip hardcoded versions")
-		fmt.Println("  -include-peers, -P  Include peer dependencies when updating")
-		fmt.Println("  -verbose, -v        Enable verbose output")
-		fmt.Println("  -no-cache, -C       Disable caching of registry lookups")
-		fmt.Println("  -version, -V        Show version information")
-		fmt.Println("  -help, -h           Show this help")
-		fmt.Println("\nExamples:")
-		fmt.Println("  bump              # Check for outdated dependencies")
-		fmt.Println("  bump -update      # Update dependencies to latest versions")
-		fmt.Println("  bump -u -v        # Update with verbose output")
-		fmt.Println("  bump -s           # Check with semver constraints (^, ~)")
-		fmt.Println("  bump -u -s        # Update with semver constraints")
-		fmt.Println("  bump -u -P        # Update including peer dependencies")
+		output.PrintHelp(version)
 		os.Exit(0)
 	}
 
 	// Auto-detect dependency file in current directory
-	filePath, fileType, err := autoDetectDependencyFile()
+	filePath, fileType, err := parser.AutoDetectDependencyFile()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-
-	// Extract filename from path for display
-	fileName := filepath.Base(filePath)
 
 	if *verbose {
 		fmt.Printf("Found %s file: %s\n", fileType, filePath)
@@ -140,14 +64,12 @@ func main() {
 		fmt.Printf("Found %d dependencies\n", len(dependencies))
 	}
 
-	// Always check for outdated dependencies
-	fmt.Printf("Checking %d dependencies from %s...\n", len(dependencies), fileName)
+	// Always check for outdated dependencies (and extract filename from path for display)
+	fmt.Printf("Checking %d dependencies from %s...\n", len(dependencies), filepath.Base(filePath))
 
 	var progressCallback func(current, total int)
 	if !*verbose {
-		progressCallback = func(current, total int) {
-			printProgressBar(current, total)
-		}
+		progressCallback = output.PrintProgressBar
 	}
 
 	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, *semver, *noCache, progressCallback)
@@ -184,75 +106,16 @@ func main() {
 		fmt.Printf("\n") // Add new line after progress bar only in non-verbose mode
 	}
 
-	if *verbose && len(outdated) > 0 {
-		fmt.Printf("\nFound %d outdated dependencies:\n", len(outdated))
-	}
-
 	// Display results
-	if len(outdated) > 0 {
-		// Calculate maximum widths for proper alignment
-		maxNameWidth := 0
-		maxCurrentVersionWidth := 0
-		for _, dependency := range outdated {
-			if len(dependency.Name) > maxNameWidth {
-				maxNameWidth = len(dependency.Name)
-			}
-			if len(dependency.OriginalVersion) > maxCurrentVersionWidth {
-				maxCurrentVersionWidth = len(dependency.OriginalVersion)
-			}
-		}
-
-		// Add some padding
-		maxNameWidth += 2
-		maxCurrentVersionWidth += 2
-
-		for _, dependency := range outdated {
-			change := shared.GetSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
-			color := getChangeColor(change)
-
-			// Use the original version from the dependency struct
-			currentVersion := dependency.OriginalVersion
-			latestVersion := strings.Replace(currentVersion, dependency.CurrentVersion, dependency.LatestVersion, 1)
-
-			// Apply color to output for better visibility
-			fmt.Printf("%s%-*s%s  %*s  →  %s%s%s\n",
-				ColorCyan, maxNameWidth, dependency.Name, ColorReset,
-				maxCurrentVersionWidth, currentVersion,
-				color, latestVersion, ColorReset)
-		}
-	}
+	output.PrintOutdatedDependencies(outdated, *verbose)
 
 	// Display semver skipped summary if in semver mode and there were skipped packages
-	if *semver && len(semverSkipped) > 0 {
-		if *verbose {
-			fmt.Printf("\nPackages skipped due to semver constraints:\n")
-			for _, skipped := range semverSkipped {
-				if skipped.LatestVersion != "" {
-					fmt.Printf("  %s%s%s: %s → %s (%s)\n", ColorCyan, skipped.Name, ColorReset, skipped.OriginalVersion, skipped.LatestVersion, skipped.Reason)
-				} else {
-					fmt.Printf("  %s%s%s: %s (%s)\n", ColorCyan, skipped.Name, ColorReset, skipped.OriginalVersion, skipped.Reason)
-				}
-			}
-		} else {
-			fmt.Printf("\n%d packages were skipped due to updates not meeting semver constraints. Run 'bump %s %s' to see the full output.\n", len(semverSkipped), semverFlag, verboseFlag)
-		}
+	if *semver {
+		output.PrintSemverSkipped(semverSkipped, *verbose)
 	}
 
 	// Display error summary if there were errors
-	if len(errors) > 0 {
-		if *verbose {
-			fmt.Printf("\nErrors encountered:\n")
-			for _, dependencyError := range errors {
-				fmt.Printf("  %s%s%s: %s\n", ColorCyan, dependencyError.Name, ColorReset, dependencyError.Error)
-			}
-		} else {
-			if *semver {
-				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump %s %s' to see the full output.\n", len(errors), semverFlag, verboseFlag)
-			} else {
-				fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump %s' to see the full output.\n", len(errors), verboseFlag)
-			}
-		}
-	}
+	output.PrintErrors(errors, *verbose, *semver)
 
 	// Update if requested
 	if *update {
@@ -267,70 +130,6 @@ func main() {
 			fmt.Println("\nNo dependencies to update.")
 		}
 	} else {
-		if len(outdated) > 0 {
-			if *semver {
-				fmt.Printf("\nRun 'bump %s %s' to update dependencies while respecting semver constraints.\n", updateFlag, semverFlag)
-			} else {
-				fmt.Printf("\nRun 'bump %s' to update dependencies to latest versions.\n", updateFlag)
-			}
-		}
-	}
-}
-
-// autoDetectDependencyFile looks for package.json or pubspec.yaml in the current directory
-func autoDetectDependencyFile() (string, string, error) {
-	currentWorkingDir, err := os.Getwd()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	// Check for package.json first
-	packageJson := filepath.Join(currentWorkingDir, "package.json")
-	if _, err := os.Stat(packageJson); err == nil {
-		return packageJson, "npm", nil
-	}
-
-	// Check for pubspec.yaml
-	pubspecYaml := filepath.Join(currentWorkingDir, "pubspec.yaml")
-	if _, err := os.Stat(pubspecYaml); err == nil {
-		return pubspecYaml, "pub", nil
-	}
-
-	return "", "", fmt.Errorf("no package.json or pubspec.yaml found in current directory")
-}
-
-// getChangeColor returns the appropriate color for the version change type
-func getChangeColor(change shared.SemverChange) string {
-	switch change {
-	case shared.MajorChange:
-		return ColorRed
-	case shared.MinorChange:
-		return ColorYellow
-	case shared.PatchChange:
-		return ColorGreen
-	default:
-		return ColorReset
-	}
-}
-
-// printProgressBar prints a progress bar
-func printProgressBar(current, total int) {
-	const barWidth = 20
-	progress := float64(current) / float64(total)
-	filled := int(progress * barWidth)
-
-	bar := "["
-	for i := range barWidth {
-		if i < filled {
-			bar += "="
-		} else {
-			bar += " "
-		}
-	}
-	bar += "]"
-
-	fmt.Printf("\r%s %d/%d %d%%", bar, current, total, int(progress*100))
-	if current == total {
-		fmt.Println() // New line when complete
+		output.PrintUpdatePrompt(len(outdated) > 0, *semver)
 	}
 }

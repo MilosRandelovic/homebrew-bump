@@ -1,5 +1,9 @@
 # Change Log
 
+## [1.2.0]
+
+- Ability to merge shorthand flags when calling bump, changed long flags to double-dash
+
 ## [1.1.1]
 
 - Fixed peer dependency handling

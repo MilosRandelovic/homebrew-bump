@@ -9,10 +9,10 @@ import (
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
-// Updater handles NPM package.json updating
+// Updater handles npm package.json updating
 type Updater struct{}
 
-// NewUpdater creates a new NPM updater
+// NewUpdater creates a new npm updater
 func NewUpdater() *Updater {
 	return &Updater{}
 }
