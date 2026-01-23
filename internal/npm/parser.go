@@ -98,14 +98,14 @@ func (parser *Parser) parseFile(filePath string, includePeerDependencies bool) (
 					// Basic validation - skip empty names or versions
 					if nameStr != "" && versionStr != "" {
 						dependencies = append(dependencies, shared.Dependency{
-						BaseDependency: shared.BaseDependency{
-							Name:            nameStr,
-							OriginalVersion: versionStr,
-							Type:            currentSection,
-							FilePath:        filePath,
-							LineNumber:      lineNumber + 1, // Convert to 1-based
-						},
-						Version: shared.CleanVersion(versionStr),
+							BaseDependency: shared.BaseDependency{
+								Name:            nameStr,
+								OriginalVersion: versionStr,
+								Type:            currentSection,
+								FilePath:        filePath,
+								LineNumber:      lineNumber + 1, // Convert to 1-based
+							},
+							Version: shared.CleanVersion(versionStr),
 						})
 					}
 				}

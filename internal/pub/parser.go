@@ -36,24 +36,24 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 
 		// Check if we're entering a dependency section
 		if strings.HasPrefix(trimmedLine, "dependencies:") {
-		// Finalize any pending package from previous section
-		if currentPackage != nil {
-			if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
-				dependencies = append(dependencies, *dependency)
+			// Finalize any pending package from previous section
+			if currentPackage != nil {
+				if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+					dependencies = append(dependencies, *dependency)
+				}
 			}
-		}
-		currentSection = shared.Dependencies
+			currentSection = shared.Dependencies
 			inSection = true
 			currentPackage = nil
 			continue
 		} else if strings.HasPrefix(trimmedLine, "dev_dependencies:") {
-		// Finalize any pending package from previous section
-		if currentPackage != nil {
-			if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
-				dependencies = append(dependencies, *dependency)
+			// Finalize any pending package from previous section
+			if currentPackage != nil {
+				if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+					dependencies = append(dependencies, *dependency)
+				}
 			}
-		}
-		currentSection = shared.DevDependencies
+			currentSection = shared.DevDependencies
 			inSection = true
 			currentPackage = nil
 			continue
@@ -61,14 +61,14 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 
 		// Check if we're leaving a section (non-indented line that's not a comment)
 		if inSection && len(line) > 0 && line[0] != ' ' && line[0] != '\t' && trimmedLine != "" && !strings.HasPrefix(trimmedLine, "#") {
-		// Finalize any pending package
-		if currentPackage != nil {
-			if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
-				dependencies = append(dependencies, *dependency)
+			// Finalize any pending package
+			if currentPackage != nil {
+				if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+					dependencies = append(dependencies, *dependency)
+				}
+				currentPackage = nil
 			}
-			currentPackage = nil
-		}
-		inSection = false
+			inSection = false
 		}
 
 		// If we're in a section, look for dependency definitions
@@ -80,12 +80,12 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 
 				// Check if this is a top-level package name (2 spaces indentation)
 				if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
-				// Finalize previous package if any
-				if currentPackage != nil {
-					if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
-						dependencies = append(dependencies, *dependency)
+					// Finalize previous package if any
+					if currentPackage != nil {
+						if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+							dependencies = append(dependencies, *dependency)
+						}
 					}
-				}
 
 					// Start new package
 					currentPackage = &packageInfo{
