@@ -98,12 +98,12 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 
 	grouped := make(map[string]map[shared.DependencyType][]shared.OutdatedDependency)
 	files := []string{}
-	for _, dep := range outdated {
-		if grouped[dep.FilePath] == nil {
-			grouped[dep.FilePath] = make(map[shared.DependencyType][]shared.OutdatedDependency)
-			files = append(files, dep.FilePath)
+	for _, dependency := range outdated {
+		if grouped[dependency.FilePath] == nil {
+			grouped[dependency.FilePath] = make(map[shared.DependencyType][]shared.OutdatedDependency)
+			files = append(files, dependency.FilePath)
 		}
-		grouped[dep.FilePath][dep.Type] = append(grouped[dep.FilePath][dep.Type], dep)
+		grouped[dependency.FilePath][dependency.Type] = append(grouped[dependency.FilePath][dependency.Type], dependency)
 	}
 
 	sortFilesByDepth(files)
@@ -116,14 +116,14 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 		}
 
 		for _, depType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
-			deps := types[depType]
-			if len(deps) > 0 {
+			dependencies := types[depType]
+			if len(dependencies) > 0 {
 				if showFilenames {
 					fmt.Printf("  %s:\n", depType.String())
 				} else {
 					fmt.Printf("\n%s:\n", depType.String())
 				}
-				printDependencyList(deps, showFilenames)
+				printDependencyList(dependencies, showFilenames)
 			}
 		}
 	}

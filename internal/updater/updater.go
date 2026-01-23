@@ -30,8 +30,8 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 	}
 
 	grouped := make(map[string][]shared.Dependency)
-	for _, dep := range dependencies {
-		grouped[dep.FilePath] = append(grouped[dep.FilePath], dep)
+	for _, dependency := range dependencies {
+		grouped[dependency.FilePath] = append(grouped[dependency.FilePath], dependency)
 	}
 
 	cwd, _ := os.Getwd()
@@ -41,16 +41,16 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 		fmt.Println()
 	}
 
-	for file, deps := range grouped {
+	for file, dependencies := range grouped {
 		displayPath := file
 		if relPath, err := filepath.Rel(cwd, file); err == nil {
 			displayPath = relPath
 		}
-		fmt.Printf("Checking %s (%d dependencies)\n", displayPath, len(deps))
+		fmt.Printf("Checking %s (%d dependencies)\n", displayPath, len(dependencies))
 
-		for i, dependency := range deps {
+		for i, dependency := range dependencies {
 			if progressCallback != nil {
-				progressCallback(i+1, len(deps))
+				progressCallback(i+1, len(dependencies))
 			}
 
 			// Skip complex dependencies (git, path, workspace, etc.)
@@ -218,12 +218,12 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 // UpdateDependencies updates the dependencies in the file
 func UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, registryType shared.RegistryType, options shared.Options) error {
 	byFile := make(map[string][]shared.OutdatedDependency)
-	for _, dep := range outdated {
-		path := dep.FilePath
+	for _, dependency := range outdated {
+		path := dependency.FilePath
 		if path == "" {
 			path = filePath
 		}
-		byFile[path] = append(byFile[path], dep)
+		byFile[path] = append(byFile[path], dependency)
 	}
 
 	updater, err := getUpdater(registryType)
@@ -231,8 +231,8 @@ func UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, r
 		return err
 	}
 
-	for path, deps := range byFile {
-		if err := updater.UpdateDependencies(path, deps, options); err != nil {
+	for path, dependencies := range byFile {
+		if err := updater.UpdateDependencies(path, dependencies, options); err != nil {
 			return err
 		}
 	}

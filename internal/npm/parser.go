@@ -26,13 +26,13 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 	}
 
 	if options.Monorepo {
-		var pkg struct {
+		var packageData struct {
 			Workspaces []string `json:"workspaces"`
 		}
-		json.Unmarshal(data, &pkg)
+		json.Unmarshal(data, &packageData)
 
-		if len(pkg.Workspaces) > 0 {
-			return parser.parseWorkspaces(filePath, pkg.Workspaces, options.IncludePeerDependencies)
+		if len(packageData.Workspaces) > 0 {
+			return parser.parseWorkspaces(filePath, packageData.Workspaces, options.IncludePeerDependencies)
 		}
 	}
 

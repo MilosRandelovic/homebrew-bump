@@ -431,8 +431,8 @@ func TestWorkspaceDependenciesSkipped(t *testing.T) {
 	}
 
 	// Verify workspace dependency was skipped (not in outdated or errors)
-	for _, dep := range result.Outdated {
-		if dep.Name == "@monorepo/package-a" {
+	for _, dependency := range result.Outdated {
+		if dependency.Name == "@monorepo/package-a" {
 			t.Error("Workspace dependency @monorepo/package-a should be skipped, but found in outdated list")
 		}
 	}
@@ -446,11 +446,11 @@ func TestWorkspaceDependenciesSkipped(t *testing.T) {
 	// Verify external dependencies were processed
 	foundLodash := false
 	foundAxios := false
-	for _, dep := range result.Outdated {
-		if dep.Name == "lodash" {
+	for _, dependency := range result.Outdated {
+		if dependency.Name == "lodash" {
 			foundLodash = true
 		}
-		if dep.Name == "axios" {
+		if dependency.Name == "axios" {
 			foundAxios = true
 		}
 	}

@@ -45,9 +45,9 @@ func TestParsePackageJson(t *testing.T) {
 	// Check specific dependencies - create maps for both clean and original versions
 	cleanVersionMap := make(map[string]string)
 	originalVersionMap := make(map[string]string)
-	for _, dep := range dependencies {
-		cleanVersionMap[dep.Name] = dep.Version
-		originalVersionMap[dep.Name] = dep.OriginalVersion
+	for _, dependency := range dependencies {
+		cleanVersionMap[dependency.Name] = dependency.Version
+		originalVersionMap[dependency.Name] = dependency.OriginalVersion
 	}
 
 	// Check clean versions (without prefixes)
@@ -106,17 +106,17 @@ func TestParsePeerDependencies(t *testing.T) {
 
 	if len(dependencies) != 4 {
 		t.Errorf("Expected 4 peer dependencies, got %d", len(dependencies))
-		for _, dep := range dependencies {
-			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+		for _, dependency := range dependencies {
+			t.Logf("Found dependency: %s - %s", dependency.Name, dependency.OriginalVersion)
 		}
 	}
 
 	// Create maps for easier testing
 	cleanVersionMap := make(map[string]string)
 	originalVersionMap := make(map[string]string)
-	for _, dep := range dependencies {
-		cleanVersionMap[dep.Name] = dep.Version
-		originalVersionMap[dep.Name] = dep.OriginalVersion
+	for _, dependency := range dependencies {
+		cleanVersionMap[dependency.Name] = dependency.Version
+		originalVersionMap[dependency.Name] = dependency.OriginalVersion
 	}
 
 	// Test peer dependency parsing
@@ -169,8 +169,8 @@ func TestUpdatePackageJson(t *testing.T) {
 
 	// Create a map to look up line numbers
 	lineNumbers := make(map[string]int)
-	for _, dep := range dependencies {
-		lineNumbers[dep.Name] = dep.LineNumber
+	for _, dependency := range dependencies {
+		lineNumbers[dependency.Name] = dependency.LineNumber
 	}
 
 	// Mock outdated dependencies
@@ -323,7 +323,7 @@ func TestUpdatePreservesAllContent(t *testing.T) {
 	}
 
 	// Mock dependencies for update
-	deps := []shared.OutdatedDependency{
+	outdatedDependencies := []shared.OutdatedDependency{
 		{
 			BaseDependency: shared.BaseDependency{
 				Name:            "react",
@@ -361,7 +361,7 @@ func TestUpdatePreservesAllContent(t *testing.T) {
 
 	// Update the dependencies
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, shared.Options{})
+	err = updater.UpdateDependencies(testFile, outdatedDependencies, shared.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,9 +452,9 @@ func TestUpdatePreservesAllContent(t *testing.T) {
 		`"prettier": "^2.8.0"`,
 	}
 
-	for _, dep := range unchangedDeps {
-		if !strings.Contains(updatedStr, dep) {
-			t.Errorf("Unchanged dependency missing: %s", dep)
+	for _, unchangedDependency := range unchangedDeps {
+		if !strings.Contains(updatedStr, unchangedDependency) {
+			t.Errorf("Unchanged dependency missing: %s", unchangedDependency)
 		}
 	}
 
@@ -522,17 +522,17 @@ func TestParseScopedPackages(t *testing.T) {
 	// Should include 6 dependencies
 	if len(dependencies) != 6 {
 		t.Errorf("Expected 6 dependencies, got %d", len(dependencies))
-		for _, dep := range dependencies {
-			t.Logf("Found dependency: %s - %s", dep.Name, dep.OriginalVersion)
+		for _, dependency := range dependencies {
+			t.Logf("Found dependency: %s - %s", dependency.Name, dependency.OriginalVersion)
 		}
 	}
 
 	// Create maps for easier testing
 	cleanVersionMap := make(map[string]string)
 	originalVersionMap := make(map[string]string)
-	for _, dep := range dependencies {
-		cleanVersionMap[dep.Name] = dep.Version
-		originalVersionMap[dep.Name] = dep.OriginalVersion
+	for _, dependency := range dependencies {
+		cleanVersionMap[dependency.Name] = dependency.Version
+		originalVersionMap[dependency.Name] = dependency.OriginalVersion
 	}
 
 	// Test scoped package parsing
@@ -879,7 +879,7 @@ func TestUpdateDuplicateDependenciesWithDifferentConstraints(t *testing.T) {
 	}
 
 	// Update both react dependencies (one in dependencies, one in peerDependencies)
-	deps := []shared.OutdatedDependency{
+	outdatedDependencies := []shared.OutdatedDependency{
 		{
 			BaseDependency: shared.BaseDependency{
 				Name:            "react",
@@ -905,7 +905,7 @@ func TestUpdateDuplicateDependenciesWithDifferentConstraints(t *testing.T) {
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, shared.Options{IncludePeerDependencies: true})
+	err = updater.UpdateDependencies(testFile, outdatedDependencies, shared.Options{IncludePeerDependencies: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1009,13 +1009,13 @@ func TestMonorepoWorkspaceDetection(t *testing.T) {
 	}
 
 	// Verify dependencies and their FilePath
-	depMap := make(map[string]shared.Dependency)
-	for _, dep := range dependencies {
-		depMap[dep.Name] = dep
+	dependencyMap := make(map[string]shared.Dependency)
+	for _, dependency := range dependencies {
+		dependencyMap[dependency.Name] = dependency
 	}
 
 	// Check lodash from root
-	if lodash, ok := depMap["lodash"]; ok {
+	if lodash, ok := dependencyMap["lodash"]; ok {
 		if lodash.FilePath != rootPath {
 			t.Errorf("lodash FilePath = %s, want %s", lodash.FilePath, rootPath)
 		}
@@ -1027,7 +1027,7 @@ func TestMonorepoWorkspaceDetection(t *testing.T) {
 	}
 
 	// Check react from package-a
-	if react, ok := depMap["react"]; ok {
+	if react, ok := dependencyMap["react"]; ok {
 		if react.FilePath != packageAPath {
 			t.Errorf("react FilePath = %s, want %s", react.FilePath, packageAPath)
 		}
@@ -1039,7 +1039,7 @@ func TestMonorepoWorkspaceDetection(t *testing.T) {
 	}
 
 	// Check axios from package-b
-	if axios, ok := depMap["axios"]; ok {
+	if axios, ok := dependencyMap["axios"]; ok {
 		if axios.FilePath != packageBPath {
 			t.Errorf("axios FilePath = %s, want %s", axios.FilePath, packageBPath)
 		}
@@ -1157,18 +1157,18 @@ func TestMonorepoGlobPatterns(t *testing.T) {
 	}
 
 	// Verify all dependencies are from correct files
-	depMap := make(map[string]string)
-	for _, dep := range dependencies {
-		depMap[dep.Name] = dep.FilePath
+	dependencyMap := make(map[string]string)
+	for _, dependency := range dependencies {
+		dependencyMap[dependency.Name] = dependency.FilePath
 	}
 
-	if path, ok := depMap["typescript"]; !ok || path != rootPath {
+	if path, ok := dependencyMap["typescript"]; !ok || path != rootPath {
 		t.Errorf("typescript not found in root or incorrect path")
 	}
-	if path, ok := depMap["react"]; !ok || path != webPath {
+	if path, ok := dependencyMap["react"]; !ok || path != webPath {
 		t.Errorf("react not found in web or incorrect path")
 	}
-	if path, ok := depMap["lodash"]; !ok || path != utilsPath {
+	if path, ok := dependencyMap["lodash"]; !ok || path != utilsPath {
 		t.Errorf("lodash not found in utils or incorrect path")
 	}
 }
@@ -1234,14 +1234,14 @@ func TestWorkspaceDependenciesSkipped(t *testing.T) {
 	foundLodash := false
 	foundAxios := false
 
-	for _, dep := range dependencies {
-		if dep.Name == "@monorepo/package-a" && dep.Version == "*" {
+	for _, dependency := range dependencies {
+		if dependency.Name == "@monorepo/package-a" && dependency.Version == "*" {
 			foundWorkspaceDep = true
 		}
-		if dep.Name == "lodash" {
+		if dependency.Name == "lodash" {
 			foundLodash = true
 		}
-		if dep.Name == "axios" {
+		if dependency.Name == "axios" {
 			foundAxios = true
 		}
 	}

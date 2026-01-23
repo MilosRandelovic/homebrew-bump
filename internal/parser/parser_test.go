@@ -106,17 +106,17 @@ dev_dependencies:
 	// flutter and flutter_test SDK dependencies are skipped
 	if len(dependencies) != 3 {
 		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
-		for i, dep := range dependencies {
-			t.Logf("  %d: %s = %s", i, dep.Name, dep.Version)
+		for i, dependency := range dependencies {
+			t.Logf("  %d: %s = %s", i, dependency.Name, dependency.Version)
 		}
 	}
 
 	// Check specific dependencies - create maps for both clean and original versions
 	cleanVersionMap := make(map[string]string)
 	originalVersionMap := make(map[string]string)
-	for _, dep := range dependencies {
-		cleanVersionMap[dep.Name] = dep.Version
-		originalVersionMap[dep.Name] = dep.OriginalVersion
+	for _, dependency := range dependencies {
+		cleanVersionMap[dependency.Name] = dependency.Version
+		originalVersionMap[dependency.Name] = dependency.OriginalVersion
 	}
 
 	// Check clean versions (without prefixes)

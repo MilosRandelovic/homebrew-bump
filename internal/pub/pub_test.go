@@ -372,7 +372,7 @@ custom_config:
 	}
 
 	// Mock dependencies for update
-	deps := []shared.OutdatedDependency{
+	outdatedDependencies := []shared.OutdatedDependency{
 		{
 			BaseDependency: shared.BaseDependency{
 				Name:            "http",
@@ -410,7 +410,7 @@ custom_config:
 
 	// Update the dependencies
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, shared.Options{})
+	err = updater.UpdateDependencies(testFile, outdatedDependencies, shared.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -788,7 +788,7 @@ flutter:
 	updater := &Updater{}
 
 	// Test updating a dependency in the dependencies section
-	deps := []shared.OutdatedDependency{
+	outdatedDependencies := []shared.OutdatedDependency{
 		{
 			BaseDependency: shared.BaseDependency{
 				Name:            "http",
@@ -802,7 +802,7 @@ flutter:
 		},
 	}
 
-	err = updater.UpdateDependencies(pubspecPath1, deps, shared.Options{})
+	err = updater.UpdateDependencies(pubspecPath1, outdatedDependencies, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update dependencies: %v", err)
 	}
@@ -824,7 +824,7 @@ flutter:
 	}
 
 	// Test updating a dev dependency
-	devDeps := []shared.OutdatedDependency{
+	devDependencies := []shared.OutdatedDependency{
 		{
 			BaseDependency: shared.BaseDependency{
 				Name:            "test",
@@ -838,7 +838,7 @@ flutter:
 		},
 	}
 
-	err = updater.UpdateDependencies(pubspecPath2, devDeps, shared.Options{})
+	err = updater.UpdateDependencies(pubspecPath2, devDependencies, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update dev dependencies: %v", err)
 	}
