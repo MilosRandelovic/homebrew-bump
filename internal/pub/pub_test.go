@@ -39,7 +39,7 @@ dev_dependencies:
 	}
 
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(pubspecPath, false)
+	dependencies, err := parser.ParseDependencies(pubspecPath, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
@@ -134,25 +134,31 @@ dev_dependencies:
 	// Mock outdated dependencies
 	outdated := []shared.OutdatedDependency{
 		{
-			Name:            "http",
-			CurrentVersion:  "0.13.5",
-			LatestVersion:   "0.13.6",
-			OriginalVersion: "^0.13.5",
-			Type:            shared.Dependencies,
-			LineNumber:      5, // http: ^0.13.5
+			BaseDependency: shared.BaseDependency{
+				Name:            "http",
+				OriginalVersion: "^0.13.5",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      5,
+			},
+			CurrentVersion: "0.13.5",
+			LatestVersion:  "0.13.6",
 		},
 		{
-			Name:            "path",
-			CurrentVersion:  "1.8.0",
-			LatestVersion:   "1.8.3",
-			OriginalVersion: "^1.8.0",
-			Type:            shared.Dependencies,
-			LineNumber:      6, // path: ^1.8.0
+			BaseDependency: shared.BaseDependency{
+				Name:            "path",
+				OriginalVersion: "^1.8.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      6,
+			},
+			CurrentVersion: "1.8.0",
+			LatestVersion:  "1.8.3",
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(pubspecPath, outdated, false, false, false)
+	err = updater.UpdateDependencies(pubspecPath, outdated, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update pubspec.yaml: %v", err)
 	}
@@ -182,18 +188,18 @@ dev_dependencies:
 
 func TestGetFileType(t *testing.T) {
 	parser := NewParser()
-	if parser.GetFileType() != "pub" {
-		t.Errorf("Expected file type 'pub', got '%s'", parser.GetFileType())
+	if parser.GetRegistryType() != shared.Pub {
+		t.Errorf("Expected registry type Pub, got '%s'", parser.GetRegistryType().String())
 	}
 
 	updater := NewUpdater()
-	if updater.GetFileType() != "pub" {
-		t.Errorf("Expected file type 'pub', got '%s'", updater.GetFileType())
+	if updater.GetRegistryType() != shared.Pub {
+		t.Errorf("Expected registry type Pub, got '%s'", updater.GetRegistryType().String())
 	}
 
 	registry := NewRegistryClient()
-	if registry.GetFileType() != "pub" {
-		t.Errorf("Expected file type 'pub', got '%s'", registry.GetFileType())
+	if registry.GetRegistryType() != shared.Pub {
+		t.Errorf("Expected registry type Pub, got '%s'", registry.GetRegistryType().String())
 	}
 }
 
@@ -241,7 +247,7 @@ dependencies:
 	}
 
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(pubspecPath, false)
+	dependencies, err := parser.ParseDependencies(pubspecPath, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
 	}
@@ -368,34 +374,43 @@ custom_config:
 	// Mock dependencies for update
 	deps := []shared.OutdatedDependency{
 		{
-			Name:            "http",
-			CurrentVersion:  "0.13.0",
-			LatestVersion:   "0.13.5",
-			OriginalVersion: "^0.13.0",
-			Type:            shared.Dependencies,
-			LineNumber:      14, // http: ^0.13.0
+			BaseDependency: shared.BaseDependency{
+				Name:            "http",
+				OriginalVersion: "^0.13.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      14,
+			},
+			CurrentVersion: "0.13.0",
+			LatestVersion:  "0.13.5",
 		},
 		{
-			Name:            "provider",
-			CurrentVersion:  "6.0.0",
-			LatestVersion:   "6.1.2",
-			OriginalVersion: "^6.0.0",
-			Type:            shared.Dependencies,
-			LineNumber:      17, // provider: ^6.0.0
+			BaseDependency: shared.BaseDependency{
+				Name:            "provider",
+				OriginalVersion: "^6.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      17,
+			},
+			CurrentVersion: "6.0.0",
+			LatestVersion:  "6.1.2",
 		},
 		{
-			Name:            "build_runner",
-			CurrentVersion:  "2.4.0",
-			LatestVersion:   "2.4.7",
-			OriginalVersion: "^2.4.0",
-			Type:            shared.DevDependencies,
-			LineNumber:      27, // build_runner: ^2.4.0
+			BaseDependency: shared.BaseDependency{
+				Name:            "build_runner",
+				OriginalVersion: "^2.4.0",
+				Type:            shared.DevDependencies,
+				FilePath:        "",
+				LineNumber:      27,
+			},
+			CurrentVersion: "2.4.0",
+			LatestVersion:  "2.4.7",
 		},
 	}
 
 	// Update the dependencies
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, false, false, false)
+	err = updater.UpdateDependencies(testFile, deps, shared.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -513,35 +528,44 @@ dev_dependencies:
 	// Mock outdated hosted dependencies
 	outdated := []shared.OutdatedDependency{
 		{
-			Name:            "company_core",
-			CurrentVersion:  "1.0.0",
-			LatestVersion:   "1.2.0",
-			OriginalVersion: "^1.0.0",
-			Type:            shared.Dependencies,
-			LineNumber:      12, // version: ^1.0.0
-			HostedURL:       "https://packages.company.com/pub",
+			BaseDependency: shared.BaseDependency{
+				Name:            "company_core",
+				OriginalVersion: "^1.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				HostedURL:       "https://packages.company.com/pub",
+				LineNumber:      12,
+			},
+			CurrentVersion: "1.0.0",
+			LatestVersion:  "1.2.0",
 		},
 		{
-			Name:            "internal_tools",
-			CurrentVersion:  "2.5.0",
-			LatestVersion:   "2.6.1",
-			OriginalVersion: "~2.5.0",
-			Type:            shared.Dependencies,
-			LineNumber:      17, // version: ~2.5.0
-			HostedURL:       "https://internal-registry.example.com/pub/",
+			BaseDependency: shared.BaseDependency{
+				Name:            "internal_tools",
+				OriginalVersion: "~2.5.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				HostedURL:       "https://internal-registry.example.com/pub/",
+				LineNumber:      17,
+			},
+			CurrentVersion: "2.5.0",
+			LatestVersion:  "2.6.1",
 		},
 		{
-			Name:            "http",
-			CurrentVersion:  "0.13.0",
-			LatestVersion:   "0.13.5",
-			OriginalVersion: "^0.13.0",
-			Type:            shared.Dependencies,
-			LineNumber:      7, // http: ^0.13.0
+			BaseDependency: shared.BaseDependency{
+				Name:            "http",
+				OriginalVersion: "^0.13.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      7,
+			},
+			CurrentVersion: "0.13.0",
+			LatestVersion:  "0.13.5",
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(pubspecPath, outdated, false, false, false)
+	err = updater.UpdateDependencies(pubspecPath, outdated, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update pubspec.yaml: %v", err)
 	}
@@ -766,16 +790,19 @@ flutter:
 	// Test updating a dependency in the dependencies section
 	deps := []shared.OutdatedDependency{
 		{
-			Name:            "http",
-			CurrentVersion:  "0.13.5",
-			LatestVersion:   "0.13.6",
-			OriginalVersion: "^0.13.5",
-			Type:            shared.Dependencies,
-			LineNumber:      9, // http: ^0.13.5
+			BaseDependency: shared.BaseDependency{
+				Name:            "http",
+				OriginalVersion: "^0.13.5",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      9,
+			},
+			CurrentVersion: "0.13.5",
+			LatestVersion:  "0.13.6",
 		},
 	}
 
-	err = updater.UpdateDependencies(pubspecPath1, deps, false, false, false)
+	err = updater.UpdateDependencies(pubspecPath1, deps, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update dependencies: %v", err)
 	}
@@ -799,16 +826,19 @@ flutter:
 	// Test updating a dev dependency
 	devDeps := []shared.OutdatedDependency{
 		{
-			Name:            "test",
-			CurrentVersion:  "1.21.0",
-			LatestVersion:   "1.22.0",
-			OriginalVersion: "^1.21.0",
-			Type:            shared.DevDependencies,
-			LineNumber:      5, // test: ^1.21.0
+			BaseDependency: shared.BaseDependency{
+				Name:            "test",
+				OriginalVersion: "^1.21.0",
+				Type:            shared.DevDependencies,
+				FilePath:        "",
+				LineNumber:      5,
+			},
+			CurrentVersion: "1.21.0",
+			LatestVersion:  "1.22.0",
 		},
 	}
 
-	err = updater.UpdateDependencies(pubspecPath2, devDeps, false, false, false)
+	err = updater.UpdateDependencies(pubspecPath2, devDeps, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update dev dependencies: %v", err)
 	}

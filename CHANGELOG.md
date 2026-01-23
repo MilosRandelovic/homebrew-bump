@@ -1,5 +1,9 @@
 # Change Log
 
+## [1.3.0]
+
+- Add monorepo support to npm parsing
+
 ## [1.2.0]
 
 - Ability to merge shorthand flags when calling bump, changed long flags to double-dash

@@ -85,18 +85,18 @@ func IsSemverCompatible(constraint, targetVersion string) bool {
 	}
 
 	// Parse the constraint using Masterminds semver
-	c, err := semver.NewConstraint(constraint)
+	semverConstraint, err := semver.NewConstraint(constraint)
 	if err != nil {
 		return false
 	}
 
 	// Parse the target version
-	v, err := semver.NewVersion(targetVersion)
+	semverVersion, err := semver.NewVersion(targetVersion)
 	if err != nil {
 		return false
 	}
 
-	return c.Check(v)
+	return semverConstraint.Check(semverVersion)
 }
 
 // FindBothLatestVersions finds both the absolute latest version and the latest version satisfying a constraint

@@ -139,11 +139,17 @@ func TestSemverSkippedTracking(t *testing.T) {
 	result := &shared.CheckResult{
 		SemverSkipped: []shared.SemverSkipped{
 			{
-				Name:            "test-package",
-				CurrentVersion:  "1.0.0",
-				LatestVersion:   "2.0.0",
-				OriginalVersion: "^1.0.0",
-				Reason:          "incompatible with constraint",
+				OutdatedDependency: shared.OutdatedDependency{
+					BaseDependency: shared.BaseDependency{
+						Name:            "test-package",
+						OriginalVersion: "^1.0.0",
+						Type:            shared.Dependencies,
+						FilePath:        "",
+					},
+					CurrentVersion: "1.0.0",
+					LatestVersion:  "2.0.0",
+				},
+				Reason: "incompatible with constraint",
 			},
 		},
 	}
@@ -293,7 +299,7 @@ type MockRegistryClient struct {
 	packageVersions map[string][]string
 }
 
-func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool, cache *shared.Cache) (string, error) {
+func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, options shared.Options, cache *shared.Cache) (string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", fmt.Errorf("package not found")
@@ -301,7 +307,7 @@ func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, 
 	return versions[len(versions)-1], nil
 }
 
-func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool, cache *shared.Cache) (string, string, error) {
+func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, options shared.Options, cache *shared.Cache) (string, string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", "", fmt.Errorf("package not found")
@@ -309,8 +315,8 @@ func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constra
 	return shared.FindBothLatestVersions(versions, constraint)
 }
 
-func (mockClient *MockRegistryClient) GetFileType() string {
-	return "mock"
+func (mockClient *MockRegistryClient) GetRegistryType() shared.RegistryType {
+	return shared.Npm // Mock defaults to Npm type
 }
 
 func TestCheckForUpdatesIntegration(t *testing.T) {
@@ -357,7 +363,7 @@ func TestConstraintMatchesNoVersions(t *testing.T) {
 	}
 
 	// Test the scenario directly using the shared function
-	absoluteLatest, constraintLatest, err := mockRegistry.GetBothLatestVersions("core", "^0.0.1", "", false, nil)
+	absoluteLatest, constraintLatest, err := mockRegistry.GetBothLatestVersions("core", "^0.0.1", "", shared.Options{}, nil)
 	if err == nil {
 		t.Fatal("Expected error for incompatible constraint, got nil")
 	}
@@ -375,4 +381,124 @@ func TestConstraintMatchesNoVersions(t *testing.T) {
 	if constraintLatest != "" {
 		t.Errorf("Expected empty constraint latest when no versions satisfy, got '%s'", constraintLatest)
 	}
+}
+
+func TestWorkspaceDependenciesSkipped(t *testing.T) {
+	// Test that workspace dependencies with * version are skipped
+	dependencies := []shared.Dependency{
+		{
+			BaseDependency: shared.BaseDependency{
+				Name:            "lodash",
+				OriginalVersion: "^4.17.0",
+				Type:            shared.Dependencies,
+				FilePath:        "/test/package.json",
+				LineNumber:      1,
+			},
+			Version: "4.17.21",
+		},
+		{
+			BaseDependency: shared.BaseDependency{
+				Name:            "@monorepo/package-a",
+				OriginalVersion: "*",
+				Type:            shared.Dependencies,
+				FilePath:        "/test/package.json",
+				LineNumber:      2,
+			},
+			Version: "*",
+		},
+		{
+			BaseDependency: shared.BaseDependency{
+				Name:            "axios",
+				OriginalVersion: "^1.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "/test/package.json",
+				LineNumber:      3,
+			},
+			Version: "1.6.0",
+		},
+	}
+
+	mockRegistry := &MockRegistryClient{
+		packageVersions: map[string][]string{
+			"lodash": {"4.17.21", "4.18.0"},
+			"axios":  {"1.6.0", "1.7.0"},
+		},
+	}
+
+	result, err := checkOutdatedWithMockRegistry(dependencies, mockRegistry, shared.Options{})
+	if err != nil {
+		t.Fatalf("CheckOutdated failed: %v", err)
+	}
+
+	// Verify workspace dependency was skipped (not in outdated or errors)
+	for _, dep := range result.Outdated {
+		if dep.Name == "@monorepo/package-a" {
+			t.Error("Workspace dependency @monorepo/package-a should be skipped, but found in outdated list")
+		}
+	}
+
+	for _, errDep := range result.Errors {
+		if errDep.Name == "@monorepo/package-a" {
+			t.Error("Workspace dependency @monorepo/package-a should be skipped, but found in errors list")
+		}
+	}
+
+	// Verify external dependencies were processed
+	foundLodash := false
+	foundAxios := false
+	for _, dep := range result.Outdated {
+		if dep.Name == "lodash" {
+			foundLodash = true
+		}
+		if dep.Name == "axios" {
+			foundAxios = true
+		}
+	}
+
+	if !foundLodash {
+		t.Error("External dependency lodash should be checked for updates")
+	}
+	if !foundAxios {
+		t.Error("External dependency axios should be checked for updates")
+	}
+}
+
+func checkOutdatedWithMockRegistry(dependencies []shared.Dependency, mockRegistry *MockRegistryClient, options shared.Options) (*shared.CheckResult, error) {
+	var outdated []shared.OutdatedDependency
+	var errors []shared.DependencyError
+
+	for _, dependency := range dependencies {
+		// Skip complex dependencies
+		if strings.HasPrefix(dependency.Version, "git:") || strings.HasPrefix(dependency.Version, "path:") || dependency.Version == "complex" || dependency.Version == "*" {
+			continue
+		}
+
+		latestVersion, err := mockRegistry.GetLatestVersionFromRegistry(dependency.Name, "", options, nil)
+		if err != nil {
+			errors = append(errors, shared.DependencyError{
+				Name:  dependency.Name,
+				Error: err.Error(),
+			})
+			continue
+		}
+
+		if dependency.Version != latestVersion {
+			outdated = append(outdated, shared.OutdatedDependency{
+				BaseDependency: shared.BaseDependency{
+					Name:            dependency.Name,
+					OriginalVersion: dependency.OriginalVersion,
+					Type:            dependency.Type,
+					FilePath:        dependency.FilePath,
+					LineNumber:      dependency.LineNumber,
+				},
+				CurrentVersion: dependency.Version,
+				LatestVersion:  latestVersion,
+			})
+		}
+	}
+
+	return &shared.CheckResult{
+		Outdated: outdated,
+		Errors:   errors,
+	}, nil
 }

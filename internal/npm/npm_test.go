@@ -33,7 +33,7 @@ func TestParsePackageJson(t *testing.T) {
 	}
 
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(packageJsonPath, false)
+	dependencies, err := parser.ParseDependencies(packageJsonPath, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestParsePeerDependencies(t *testing.T) {
 	}
 
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(packageJsonPath, true)
+	dependencies, err := parser.ParseDependencies(packageJsonPath, shared.Options{IncludePeerDependencies: true})
 	if err != nil {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestUpdatePackageJson(t *testing.T) {
 
 	// First, parse dependencies to get line numbers
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(packageJsonPath, false)
+	dependencies, err := parser.ParseDependencies(packageJsonPath, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
@@ -176,25 +176,31 @@ func TestUpdatePackageJson(t *testing.T) {
 	// Mock outdated dependencies
 	outdated := []shared.OutdatedDependency{
 		{
-			Name:            "react",
-			CurrentVersion:  "18.0.0",
-			LatestVersion:   "18.2.0",
-			OriginalVersion: "^18.0.0",
-			Type:            shared.Dependencies,
-			LineNumber:      lineNumbers["react"],
+			BaseDependency: shared.BaseDependency{
+				Name:            "react",
+				OriginalVersion: "^18.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      lineNumbers["react"],
+			},
+			CurrentVersion: "18.0.0",
+			LatestVersion:  "18.2.0",
 		},
 		{
-			Name:            "lodash",
-			CurrentVersion:  "4.17.20",
-			LatestVersion:   "4.17.21",
-			OriginalVersion: "~4.17.20",
-			Type:            shared.Dependencies,
-			LineNumber:      lineNumbers["lodash"],
+			BaseDependency: shared.BaseDependency{
+				Name:            "lodash",
+				OriginalVersion: "~4.17.20",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      lineNumbers["lodash"],
+			},
+			CurrentVersion: "4.17.20",
+			LatestVersion:  "4.17.21",
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(packageJsonPath, outdated, false, false, false)
+	err = updater.UpdateDependencies(packageJsonPath, outdated, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update package.json: %v", err)
 	}
@@ -319,34 +325,43 @@ func TestUpdatePreservesAllContent(t *testing.T) {
 	// Mock dependencies for update
 	deps := []shared.OutdatedDependency{
 		{
-			Name:            "react",
-			CurrentVersion:  "18.0.0",
-			LatestVersion:   "18.2.0",
-			OriginalVersion: "^18.0.0",
-			Type:            shared.Dependencies,
-			LineNumber:      30, // "react": "^18.0.0",
+			BaseDependency: shared.BaseDependency{
+				Name:            "react",
+				OriginalVersion: "^18.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      30,
+			},
+			CurrentVersion: "18.0.0",
+			LatestVersion:  "18.2.0",
 		},
 		{
-			Name:            "axios",
-			CurrentVersion:  "1.4.0",
-			LatestVersion:   "1.5.0",
-			OriginalVersion: "^1.4.0",
-			Type:            shared.Dependencies,
-			LineNumber:      32, // "axios": "^1.4.0",
+			BaseDependency: shared.BaseDependency{
+				Name:            "axios",
+				OriginalVersion: "^1.4.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      32,
+			},
+			CurrentVersion: "1.4.0",
+			LatestVersion:  "1.5.0",
 		},
 		{
-			Name:            "eslint",
-			CurrentVersion:  "8.45.0",
-			LatestVersion:   "8.47.0",
-			OriginalVersion: "^8.45.0",
-			Type:            shared.DevDependencies,
-			LineNumber:      39, // "eslint": "^8.45.0",
+			BaseDependency: shared.BaseDependency{
+				Name:            "eslint",
+				OriginalVersion: "^8.45.0",
+				Type:            shared.DevDependencies,
+				FilePath:        "",
+				LineNumber:      39,
+			},
+			CurrentVersion: "8.45.0",
+			LatestVersion:  "8.47.0",
 		},
 	}
 
 	// Update the dependencies
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, false, false, false)
+	err = updater.UpdateDependencies(testFile, deps, shared.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,18 +472,18 @@ func TestUpdatePreservesAllContent(t *testing.T) {
 
 func TestGetFileType(t *testing.T) {
 	parser := NewParser()
-	if parser.GetFileType() != "npm" {
-		t.Errorf("Expected file type 'npm', got '%s'", parser.GetFileType())
+	if parser.GetRegistryType() != shared.Npm {
+		t.Errorf("Expected registry type Npm, got '%s'", parser.GetRegistryType().String())
 	}
 
 	updater := NewUpdater()
-	if updater.GetFileType() != "npm" {
-		t.Errorf("Expected file type 'npm', got '%s'", updater.GetFileType())
+	if updater.GetRegistryType() != shared.Npm {
+		t.Errorf("Expected registry type Npm, got '%s'", updater.GetRegistryType().String())
 	}
 
 	registry := NewRegistryClient()
-	if registry.GetFileType() != "npm" {
-		t.Errorf("Expected file type 'npm', got '%s'", registry.GetFileType())
+	if registry.GetRegistryType() != shared.Npm {
+		t.Errorf("Expected registry type Npm, got '%s'", registry.GetRegistryType().String())
 	}
 }
 
@@ -499,7 +514,7 @@ func TestParseScopedPackages(t *testing.T) {
 	}
 
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(packageJsonPath, false)
+	dependencies, err := parser.ParseDependencies(packageJsonPath, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
@@ -568,33 +583,42 @@ func TestUpdateScopedPackages(t *testing.T) {
 	// Mock outdated scoped dependencies
 	outdated := []shared.OutdatedDependency{
 		{
-			Name:            "@company/private-pkg",
-			CurrentVersion:  "1.2.3",
-			LatestVersion:   "1.3.0",
-			OriginalVersion: "^1.2.3",
-			Type:            shared.Dependencies,
-			LineNumber:      4,
+			BaseDependency: shared.BaseDependency{
+				Name:            "@company/private-pkg",
+				OriginalVersion: "^1.2.3",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      4,
+			},
+			CurrentVersion: "1.2.3",
+			LatestVersion:  "1.3.0",
 		},
 		{
-			Name:            "@angular/core",
-			CurrentVersion:  "16.0.0",
-			LatestVersion:   "16.2.0",
-			OriginalVersion: "^16.0.0",
-			Type:            shared.Dependencies,
-			LineNumber:      5,
+			BaseDependency: shared.BaseDependency{
+				Name:            "@angular/core",
+				OriginalVersion: "^16.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      5,
+			},
+			CurrentVersion: "16.0.0",
+			LatestVersion:  "16.2.0",
 		},
 		{
-			Name:            "@babel/core",
-			CurrentVersion:  "7.22.0",
-			LatestVersion:   "7.22.5",
-			OriginalVersion: ">=7.22.0",
-			Type:            shared.DevDependencies,
-			LineNumber:      9,
+			BaseDependency: shared.BaseDependency{
+				Name:            "@babel/core",
+				OriginalVersion: ">=7.22.0",
+				Type:            shared.DevDependencies,
+				FilePath:        "",
+				LineNumber:      9,
+			},
+			CurrentVersion: "7.22.0",
+			LatestVersion:  "7.22.5",
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(packageJsonPath, outdated, false, false, false)
+	err = updater.UpdateDependencies(packageJsonPath, outdated, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update package.json: %v", err)
 	}
@@ -857,25 +881,31 @@ func TestUpdateDuplicateDependenciesWithDifferentConstraints(t *testing.T) {
 	// Update both react dependencies (one in dependencies, one in peerDependencies)
 	deps := []shared.OutdatedDependency{
 		{
-			Name:            "react",
-			CurrentVersion:  "18.0.0",
-			LatestVersion:   "18.2.0",
-			OriginalVersion: "^18.0.0",
-			Type:            shared.Dependencies,
-			LineNumber:      5,
+			BaseDependency: shared.BaseDependency{
+				Name:            "react",
+				OriginalVersion: "^18.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "",
+				LineNumber:      5,
+			},
+			CurrentVersion: "18.0.0",
+			LatestVersion:  "18.2.0",
 		},
 		{
-			Name:            "react",
-			CurrentVersion:  "16.0.0",
-			LatestVersion:   "18.2.0",
-			OriginalVersion: ">=16.0.0",
-			Type:            shared.PeerDependencies,
-			LineNumber:      11,
+			BaseDependency: shared.BaseDependency{
+				Name:            "react",
+				OriginalVersion: ">=16.0.0",
+				Type:            shared.PeerDependencies,
+				FilePath:        "",
+				LineNumber:      11,
+			},
+			CurrentVersion: "16.0.0",
+			LatestVersion:  "18.2.0",
 		},
 	}
 
 	updater := NewUpdater()
-	err = updater.UpdateDependencies(testFile, deps, false, false, true) // includePeerDependencies = true
+	err = updater.UpdateDependencies(testFile, deps, shared.Options{IncludePeerDependencies: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -911,5 +941,318 @@ func TestUpdateDuplicateDependenciesWithDifferentConstraints(t *testing.T) {
 	}
 	if !peerDependenciesMatch {
 		t.Errorf("PeerDependencies section not correctly updated")
+	}
+}
+
+func TestMonorepoWorkspaceDetection(t *testing.T) {
+	// Create temporary directory structure for monorepo
+	rootDir := t.TempDir()
+	packagesDir := filepath.Join(rootDir, "packages")
+	packageADir := filepath.Join(packagesDir, "package-a")
+	packageBDir := filepath.Join(packagesDir, "package-b")
+
+	if err := os.MkdirAll(packageADir, 0755); err != nil {
+		t.Fatalf("Failed to create package-a directory: %v", err)
+	}
+	if err := os.MkdirAll(packageBDir, 0755); err != nil {
+		t.Fatalf("Failed to create package-b directory: %v", err)
+	}
+
+	// Create root package.json with workspaces
+	rootPackageJSON := `{
+  "name": "root",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "lodash": "^4.17.0"
+  }
+}`
+	rootPath := filepath.Join(rootDir, "package.json")
+	if err := os.WriteFile(rootPath, []byte(rootPackageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create root package.json: %v", err)
+	}
+
+	// Create package-a/package.json
+	packageAJSON := `{
+  "name": "package-a",
+  "dependencies": {
+    "react": "^17.0.0"
+  }
+}`
+	packageAPath := filepath.Join(packageADir, "package.json")
+	if err := os.WriteFile(packageAPath, []byte(packageAJSON), 0644); err != nil {
+		t.Fatalf("Failed to create package-a/package.json: %v", err)
+	}
+
+	// Create package-b/package.json
+	packageBJSON := `{
+  "name": "package-b",
+  "dependencies": {
+    "axios": "^1.0.0"
+  }
+}`
+	packageBPath := filepath.Join(packageBDir, "package.json")
+	if err := os.WriteFile(packageBPath, []byte(packageBJSON), 0644); err != nil {
+		t.Fatalf("Failed to create package-b/package.json: %v", err)
+	}
+
+	// Parse with monorepo flag enabled
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(rootPath, shared.Options{Monorepo: true})
+	if err != nil {
+		t.Fatalf("Failed to parse monorepo: %v", err)
+	}
+
+	// Should find dependencies from all three package.json files
+	if len(dependencies) != 3 {
+		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
+	}
+
+	// Verify dependencies and their FilePath
+	depMap := make(map[string]shared.Dependency)
+	for _, dep := range dependencies {
+		depMap[dep.Name] = dep
+	}
+
+	// Check lodash from root
+	if lodash, ok := depMap["lodash"]; ok {
+		if lodash.FilePath != rootPath {
+			t.Errorf("lodash FilePath = %s, want %s", lodash.FilePath, rootPath)
+		}
+		if lodash.Version != "4.17.0" {
+			t.Errorf("lodash Version = %s, want 4.17.0", lodash.Version)
+		}
+	} else {
+		t.Error("lodash dependency not found")
+	}
+
+	// Check react from package-a
+	if react, ok := depMap["react"]; ok {
+		if react.FilePath != packageAPath {
+			t.Errorf("react FilePath = %s, want %s", react.FilePath, packageAPath)
+		}
+		if react.Version != "17.0.0" {
+			t.Errorf("react Version = %s, want 17.0.0", react.Version)
+		}
+	} else {
+		t.Error("react dependency not found")
+	}
+
+	// Check axios from package-b
+	if axios, ok := depMap["axios"]; ok {
+		if axios.FilePath != packageBPath {
+			t.Errorf("axios FilePath = %s, want %s", axios.FilePath, packageBPath)
+		}
+		if axios.Version != "1.0.0" {
+			t.Errorf("axios Version = %s, want 1.0.0", axios.Version)
+		}
+	} else {
+		t.Error("axios dependency not found")
+	}
+}
+
+func TestMonorepoWithoutWorkspaces(t *testing.T) {
+	// Create a package.json without workspaces field
+	packageJSON := `{
+  "name": "regular-project",
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
+}`
+
+	tempFile, err := os.CreateTemp("", "package*.json")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	if _, err := tempFile.Write([]byte(packageJSON)); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+	tempFile.Close()
+
+	// Parse with monorepo flag enabled but no workspaces field
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(tempFile.Name(), shared.Options{Monorepo: true})
+	if err != nil {
+		t.Fatalf("Failed to parse package.json: %v", err)
+	}
+
+	// Should only find dependencies from the single file
+	if len(dependencies) != 1 {
+		t.Errorf("Expected 1 dependency, got %d", len(dependencies))
+	}
+
+	if dependencies[0].Name != "lodash" {
+		t.Errorf("Expected lodash, got %s", dependencies[0].Name)
+	}
+
+	if dependencies[0].FilePath != tempFile.Name() {
+		t.Errorf("FilePath = %s, want %s", dependencies[0].FilePath, tempFile.Name())
+	}
+}
+
+func TestMonorepoGlobPatterns(t *testing.T) {
+	// Create temporary directory structure with multiple patterns
+	rootDir := t.TempDir()
+	appsDir := filepath.Join(rootDir, "apps")
+	libsDir := filepath.Join(rootDir, "libs")
+	webAppDir := filepath.Join(appsDir, "web")
+	utilsDir := filepath.Join(libsDir, "utils")
+
+	if err := os.MkdirAll(webAppDir, 0755); err != nil {
+		t.Fatalf("Failed to create web directory: %v", err)
+	}
+	if err := os.MkdirAll(utilsDir, 0755); err != nil {
+		t.Fatalf("Failed to create utils directory: %v", err)
+	}
+
+	// Create root package.json with multiple workspace patterns
+	rootPackageJSON := `{
+  "name": "monorepo",
+  "workspaces": ["apps/*", "libs/*"],
+  "dependencies": {
+    "typescript": "^5.0.0"
+  }
+}`
+	rootPath := filepath.Join(rootDir, "package.json")
+	if err := os.WriteFile(rootPath, []byte(rootPackageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create root package.json: %v", err)
+	}
+
+	// Create apps/web/package.json
+	webJSON := `{
+  "name": "web",
+  "dependencies": {
+    "react": "^18.0.0"
+  }
+}`
+	webPath := filepath.Join(webAppDir, "package.json")
+	if err := os.WriteFile(webPath, []byte(webJSON), 0644); err != nil {
+		t.Fatalf("Failed to create web/package.json: %v", err)
+	}
+
+	// Create libs/utils/package.json
+	utilsJSON := `{
+  "name": "utils",
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
+}`
+	utilsPath := filepath.Join(utilsDir, "package.json")
+	if err := os.WriteFile(utilsPath, []byte(utilsJSON), 0644); err != nil {
+		t.Fatalf("Failed to create utils/package.json: %v", err)
+	}
+
+	// Parse with monorepo flag enabled
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(rootPath, shared.Options{Monorepo: true})
+	if err != nil {
+		t.Fatalf("Failed to parse monorepo: %v", err)
+	}
+
+	// Should find dependencies from all three locations
+	if len(dependencies) != 3 {
+		t.Errorf("Expected 3 dependencies, got %d", len(dependencies))
+	}
+
+	// Verify all dependencies are from correct files
+	depMap := make(map[string]string)
+	for _, dep := range dependencies {
+		depMap[dep.Name] = dep.FilePath
+	}
+
+	if path, ok := depMap["typescript"]; !ok || path != rootPath {
+		t.Errorf("typescript not found in root or incorrect path")
+	}
+	if path, ok := depMap["react"]; !ok || path != webPath {
+		t.Errorf("react not found in web or incorrect path")
+	}
+	if path, ok := depMap["lodash"]; !ok || path != utilsPath {
+		t.Errorf("lodash not found in utils or incorrect path")
+	}
+}
+
+func TestWorkspaceDependenciesSkipped(t *testing.T) {
+	rootDir := t.TempDir()
+	packagesDir := filepath.Join(rootDir, "packages")
+	packageADir := filepath.Join(packagesDir, "package-a")
+	packageBDir := filepath.Join(packagesDir, "package-b")
+
+	if err := os.MkdirAll(packageADir, 0755); err != nil {
+		t.Fatalf("Failed to create package-a directory: %v", err)
+	}
+	if err := os.MkdirAll(packageBDir, 0755); err != nil {
+		t.Fatalf("Failed to create package-b directory: %v", err)
+	}
+
+	// Create root package.json with workspaces
+	rootPackageJSON := `{
+  "name": "monorepo-root",
+  "private": true,
+  "workspaces": ["packages/*"]
+}`
+	rootPath := filepath.Join(rootDir, "package.json")
+	if err := os.WriteFile(rootPath, []byte(rootPackageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create root package.json: %v", err)
+	}
+
+	// Create package-a with external dependency
+	packageAJSON := `{
+  "name": "@monorepo/package-a",
+  "dependencies": {
+    "lodash": "^4.17.0"
+  }
+}`
+	packageAPath := filepath.Join(packageADir, "package.json")
+	if err := os.WriteFile(packageAPath, []byte(packageAJSON), 0644); err != nil {
+		t.Fatalf("Failed to create package-a/package.json: %v", err)
+	}
+
+	// Create package-b with workspace dependency (*)
+	packageBJSON := `{
+  "name": "@monorepo/package-b",
+  "dependencies": {
+    "@monorepo/package-a": "*",
+    "axios": "^1.0.0"
+  }
+}`
+	packageBPath := filepath.Join(packageBDir, "package.json")
+	if err := os.WriteFile(packageBPath, []byte(packageBJSON), 0644); err != nil {
+		t.Fatalf("Failed to create package-b/package.json: %v", err)
+	}
+
+	// Parse with monorepo flag enabled
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(rootPath, shared.Options{Monorepo: true})
+	if err != nil {
+		t.Fatalf("Failed to parse monorepo: %v", err)
+	}
+
+	// Verify workspace dependency with * is included in parsing
+	foundWorkspaceDep := false
+	foundLodash := false
+	foundAxios := false
+
+	for _, dep := range dependencies {
+		if dep.Name == "@monorepo/package-a" && dep.Version == "*" {
+			foundWorkspaceDep = true
+		}
+		if dep.Name == "lodash" {
+			foundLodash = true
+		}
+		if dep.Name == "axios" {
+			foundAxios = true
+		}
+	}
+
+	if !foundWorkspaceDep {
+		t.Error("Workspace dependency @monorepo/package-a with * version should be parsed")
+	}
+	if !foundLodash {
+		t.Error("External dependency lodash should be parsed")
+	}
+	if !foundAxios {
+		t.Error("External dependency axios should be parsed")
 	}
 }

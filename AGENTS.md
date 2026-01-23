@@ -2,17 +2,35 @@
 
 ## Project Context
 
-This is a Go CLI tool called "bump" that manages dependency updates for npm (package.json) and Dart/Flutter PUB (pubspec.yaml) projects. It supports semver constraints, private registries, hosted packages, and provides both checking and  updating capabilities.
+This is a Go CLI tool called "bump" that manages dependency updates for npm (package.json) and Dart/Flutter pub (pubspec.yaml) projects. It supports semver constraints, private registries, hosted packages, monorepo workspaces, and provides both checking and updating capabilities.
 
 The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (referenced in the `Formula` folder), but should always be built as `bump`.
+
+### Monorepo Support
+
+- npm monorepo support via `--monorepo` flag
+- Detects workspaces from root package.json `workspaces` field
+- Supports glob patterns for workspace detection (e.g., `packages/*`, `apps/*`)
+- Each dependency tracks its FilePath for proper file-by-file updates
+- Output groups dependencies by file when multiple files contain outdated packages
 
 ## Architecture Principles
 
 - Keep npm/ and pub/ packages separate - no cross-dependencies
 - Place common functionality in internal/shared/
 - Follow single responsibility principle per package
+- Use shared.Options struct for passing configuration flags instead of individual boolean parameters
 
 ## Code Patterns to Follow
+
+### Options Pattern
+
+- ALL functions that accept configuration flags MUST use the shared.Options struct
+- Do NOT pass individual boolean parameters (verbose, semver, monorepo, etc.)
+- Options struct contains: Verbose, Update, Semver, NoCache, IncludePeerDependencies, Monorepo
+- Example: `func ParseDependencies(filePath string, options shared.Options)` instead of `func ParseDependencies(filePath string, includePeerDependencies bool, monorepo bool)`
+- Access options with `options.Verbose`, `options.Semver`, etc.
+- In tests, initialize with `shared.Options{}` for defaults or `shared.Options{Verbose: true, Semver: true}` for specific flags
 
 ### Error Handling
 
@@ -35,12 +53,16 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 - Include real-world test data (scoped packages, hosted packages, complex constraints)
 - Add regression tests for bug fixes
 - Test edge cases: invalid versions, network errors, authentication failures
+- Test monorepo scenarios: workspace detection, glob patterns, FilePath assignment, multiple package.json files
 
 ### Output Formatting
 
-- Sort ALL output lists (outdated, semverSkipped, errors) alphabetically by name using sort.Slice
+- Sort ALL output lists (outdated, semverSkipped, errors) alphabetically by name within the print methods, not in main
+- Group dependencies by file first, then by type (dependencies, devDependencies, peerDependencies)
+- Only display file names when multiple files have outdated dependencies
+- Use relative paths for file display
 - Use semantic colors: red=major, yellow=minor, green=patch changes
-- Show progress bars in non-verbose mode
+- Show progress bars per file in non-verbose mode
 - Provide detailed information in verbose mode
 
 ### File Updates
@@ -48,6 +70,7 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 - Only update version fields, preserve all other original JSON/YAML content and formatting, including hosted references
 - Keep version prefixes (^, ~, >=) when updating
 - Internally store both clean and original versions for proper updates
+- In monorepo mode, group updates by FilePath and update each file separately
 
 ### Semver Constraint Handling
 
@@ -78,8 +101,9 @@ internal/
 ├── shared/           # Common types, version utilities, interfaces
 ├── parser/           # Auto-detection and delegation
 ├── updater/          # Core update checking logic
+├── output/           # Terminal output formatting, progress bars, help text
 ├── npm/              # npm ecosystem (package.json, .npmrc, npm registry)
-└── pub/              # Dart/Flutter PUB ecosystem (pubspec.yaml, pub-tokens.json, pub registry)
+└── pub/              # Dart/Flutter pub ecosystem (pubspec.yaml, pub-tokens.json, pub registry)
 ```
 
 When making changes, always consider the impact on both npm and pub ecosystems and ensure consistent behavior across both.

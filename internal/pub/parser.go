@@ -17,7 +17,7 @@ func NewParser() *Parser {
 }
 
 // ParseDependencies parses a pubspec.yaml file and extracts dependencies
-func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies bool) ([]shared.Dependency, error) {
+func (parser *Parser) ParseDependencies(filePath string, options shared.Options) ([]shared.Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -36,24 +36,24 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 
 		// Check if we're entering a dependency section
 		if strings.HasPrefix(trimmedLine, "dependencies:") {
-			// Finalize any pending package from previous section
-			if currentPackage != nil {
-				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
-					dependencies = append(dependencies, *dependency)
-				}
+		// Finalize any pending package from previous section
+		if currentPackage != nil {
+			if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+				dependencies = append(dependencies, *dependency)
 			}
-			currentSection = shared.Dependencies
+		}
+		currentSection = shared.Dependencies
 			inSection = true
 			currentPackage = nil
 			continue
 		} else if strings.HasPrefix(trimmedLine, "dev_dependencies:") {
-			// Finalize any pending package from previous section
-			if currentPackage != nil {
-				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
-					dependencies = append(dependencies, *dependency)
-				}
+		// Finalize any pending package from previous section
+		if currentPackage != nil {
+			if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+				dependencies = append(dependencies, *dependency)
 			}
-			currentSection = shared.DevDependencies
+		}
+		currentSection = shared.DevDependencies
 			inSection = true
 			currentPackage = nil
 			continue
@@ -61,14 +61,14 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 
 		// Check if we're leaving a section (non-indented line that's not a comment)
 		if inSection && len(line) > 0 && line[0] != ' ' && line[0] != '\t' && trimmedLine != "" && !strings.HasPrefix(trimmedLine, "#") {
-			// Finalize any pending package
-			if currentPackage != nil {
-				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
-					dependencies = append(dependencies, *dependency)
-				}
-				currentPackage = nil
+		// Finalize any pending package
+		if currentPackage != nil {
+			if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+				dependencies = append(dependencies, *dependency)
 			}
-			inSection = false
+			currentPackage = nil
+		}
+		inSection = false
 		}
 
 		// If we're in a section, look for dependency definitions
@@ -80,12 +80,12 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 
 				// Check if this is a top-level package name (2 spaces indentation)
 				if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
-					// Finalize previous package if any
-					if currentPackage != nil {
-						if dependency := currentPackage.toDependency(currentSection); dependency != nil {
-							dependencies = append(dependencies, *dependency)
-						}
+				// Finalize previous package if any
+				if currentPackage != nil {
+					if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
+						dependencies = append(dependencies, *dependency)
 					}
+				}
 
 					// Start new package
 					currentPackage = &packageInfo{
@@ -117,7 +117,7 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 
 	// Finalize any pending package
 	if currentPackage != nil {
-		if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+		if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
 			dependencies = append(dependencies, *dependency)
 		}
 	}
@@ -136,7 +136,7 @@ type packageInfo struct {
 }
 
 // toDependency converts packageInfo to shared.Dependency if it should be included
-func (pkg *packageInfo) toDependency(section shared.DependencyType) *shared.Dependency {
+func (pkg *packageInfo) toDependency(section shared.DependencyType, filePath string) *shared.Dependency {
 	// Skip SDK dependencies
 	if pkg.sdk != "" {
 		return nil
@@ -153,11 +153,14 @@ func (pkg *packageInfo) toDependency(section shared.DependencyType) *shared.Depe
 	}
 
 	dependency := &shared.Dependency{
-		Name:            pkg.name,
-		Version:         shared.CleanVersion(pkg.version),
-		OriginalVersion: pkg.version,
-		Type:            section,
-		LineNumber:      lineNum,
+		BaseDependency: shared.BaseDependency{
+			Name:            pkg.name,
+			OriginalVersion: pkg.version,
+			Type:            section,
+			FilePath:        filePath,
+			LineNumber:      lineNum,
+		},
+		Version: shared.CleanVersion(pkg.version),
 	}
 
 	// Set hosted URL for non-pub.dev hosted packages
@@ -198,9 +201,9 @@ func shouldIncludeDependency(name, version string) bool {
 	return true
 }
 
-// GetFileType returns the file type this parser handles
-func (parser *Parser) GetFileType() string {
-	return "pub"
+// GetRegistryType returns the registry type this parser handles
+func (parser *Parser) GetRegistryType() shared.RegistryType {
+	return shared.Pub
 }
 
 // Ensure Parser implements the interface

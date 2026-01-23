@@ -18,8 +18,8 @@ func NewUpdater() *Updater {
 }
 
 // UpdateDependencies updates dependencies in a package.json file using line-based updates
-func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool, includePeerDependencies bool) error {
-	if verbose && len(outdated) > 0 {
+func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, options shared.Options) error {
+	if options.Verbose && len(outdated) > 0 {
 		fmt.Printf("\n") // Add space before updates in verbose mode
 	}
 
@@ -65,7 +65,7 @@ func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.Ou
 		newLine := versionRegex.ReplaceAllString(line, fmt.Sprintf(`${1}"%s"`, newVersion))
 		lines[lineIndex] = newLine
 
-		if verbose {
+		if options.Verbose {
 			fmt.Printf("Updated %s (%s): %s -> %s\n", dependency.Name, dependency.Type.String(), oldVersion, newVersion)
 		}
 	}
@@ -79,9 +79,9 @@ func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.Ou
 	return nil
 }
 
-// GetFileType returns the file type this updater handles
-func (updater *Updater) GetFileType() string {
-	return "npm"
+// GetRegistryType returns the registry type this updater handles
+func (updater *Updater) GetRegistryType() shared.RegistryType {
+	return shared.Npm
 }
 
 // Ensure Updater implements the interface

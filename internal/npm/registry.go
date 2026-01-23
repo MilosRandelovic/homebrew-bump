@@ -31,19 +31,19 @@ func NewRegistryClient() *RegistryClient {
 }
 
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
-func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool, cache *shared.Cache) (string, error) {
+func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, options shared.Options, cache *shared.Cache) (string, error) {
 	// Check cache first if enabled
 	if cache != nil {
 		key := shared.GenerateCacheKey(packageName, "npm", "", "*")
 		if entry, ok := cache.Get(key); ok {
-			if verbose {
+			if options.Verbose {
 				fmt.Printf("Cache hit: %s\n", packageName)
 			}
 			return entry.AbsoluteLatest, nil
 		}
 	}
 
-	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
+	body, err := client.fetchPackageInfo(packageName, registryURL, options.Verbose)
 	if err != nil {
 		return "", err
 	}
@@ -74,19 +74,19 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 }
 
 // GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
-func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool, cache *shared.Cache) (string, string, error) {
+func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, options shared.Options, cache *shared.Cache) (string, string, error) {
 	// Check cache first if enabled
 	if cache != nil {
 		key := shared.GenerateCacheKey(packageName, "npm", "", constraint)
 		if entry, ok := cache.Get(key); ok {
-			if verbose {
+			if options.Verbose {
 				fmt.Printf("Cache hit: %s\n", packageName)
 			}
 			return entry.AbsoluteLatest, entry.ConstraintLatest, nil
 		}
 	}
 
-	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
+	body, err := client.fetchPackageInfo(packageName, registryURL, options.Verbose)
 	if err != nil {
 		return "", "", err
 	}
@@ -186,9 +186,9 @@ func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, 
 	return body, nil
 }
 
-// GetFileType returns the file type this registry client handles
-func (client *RegistryClient) GetFileType() string {
-	return "npm"
+// GetRegistryType returns the registry type this client handles
+func (client *RegistryClient) GetRegistryType() shared.RegistryType {
+	return shared.Npm
 }
 
 // Ensure RegistryClient implements the interface
