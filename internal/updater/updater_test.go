@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -84,87 +85,6 @@ func TestSemverVersionParsing(t *testing.T) {
 				t.Errorf("semver.NewVersion(%s) = %d.%d.%d, expected %d.%d.%d", test.input, result.Major(), result.Minor(), result.Patch(), test.expectedMaj, test.expectedMin, test.expectedPat)
 			}
 		}
-	}
-}
-
-func TestIsSemverCompatible(t *testing.T) {
-	tests := []struct {
-		originalVersion string
-		latestVersion   string
-		expected        bool
-		description     string
-	}{
-		// Caret tests
-		{"^1.0.0", "1.0.1", true, "caret allows patch updates"},
-		{"^1.0.0", "1.1.0", true, "caret allows minor updates"},
-		{"^1.0.0", "2.0.0", false, "caret does not allow major updates"},
-		{"^0.1.0", "0.1.1", true, "caret allows patch updates for 0.x"},
-		{"^0.1.0", "0.2.0", false, "caret does not allow minor updates for 0.x in strict semver"},
-		{"^0.1.0", "1.0.0", false, "caret does not allow major updates for 0.x"},
-		{"^0.0.1", "0.0.2", false, "caret does not allow patch updates for 0.0.x in strict semver"},
-		{"^0.0.1", "0.1.0", false, "caret does not allow minor updates for 0.0.x"},
-
-		// Tilde tests
-		{"~1.2.3", "1.2.4", true, "tilde allows patch updates"},
-		{"~1.2.3", "1.3.0", false, "tilde does not allow minor updates"},
-		{"~1.2.3", "2.0.0", false, "tilde does not allow major updates"},
-
-		// Hardcoded versions
-		{"1.0.0", "1.0.1", false, "hardcoded versions are not compatible"},
-		{"1.0.0", "1.1.0", false, "hardcoded versions are not compatible"},
-
-		// Pre-release versions
-		{"^1.0.0", "1.1.0-beta", false, "pre-release versions are skipped"},
-		{"^1.0.0", "1.1.0-alpha.1", false, "pre-release versions are skipped"},
-
-		// Comparison operator tests
-		{">=1.0.0", "1.1.0", true, ">= allows newer versions"},
-		{">1.0.0", "1.1.0", true, "> allows newer versions"},
-		{"<2.0.0", "1.1.0", true, "< allows older versions"},
-		{"<=2.0.0", "1.1.0", true, "<= allows older/same versions"},
-	}
-
-	for _, test := range tests {
-		result := shared.IsSemverCompatible(test.originalVersion, test.latestVersion)
-		if result != test.expected {
-			t.Errorf("%s: IsSemverCompatible(%s, %s) = %v, expected %v",
-				test.description, test.originalVersion, test.latestVersion, result, test.expected)
-		}
-	}
-}
-
-func TestSemverSkippedTracking(t *testing.T) {
-	// Test that the SemverSkipped field is properly populated
-	// This is a basic test to ensure the struct and tracking work
-	result := &shared.CheckResult{
-		SemverSkipped: []shared.SemverSkipped{
-			{
-				OutdatedDependency: shared.OutdatedDependency{
-					BaseDependency: shared.BaseDependency{
-						Name:            "test-package",
-						OriginalVersion: "^1.0.0",
-						Type:            shared.Dependencies,
-						FilePath:        "",
-					},
-					CurrentVersion: "1.0.0",
-					LatestVersion:  "2.0.0",
-				},
-				Reason: "incompatible with constraint",
-			},
-		},
-	}
-
-	if len(result.SemverSkipped) != 1 {
-		t.Errorf("Expected 1 semver skipped entry, got %d", len(result.SemverSkipped))
-	}
-
-	skipped := result.SemverSkipped[0]
-	if skipped.Name != "test-package" {
-		t.Errorf("Expected name 'test-package', got '%s'", skipped.Name)
-	}
-
-	if skipped.Reason != "incompatible with constraint" {
-		t.Errorf("Expected reason 'incompatible with constraint', got '%s'", skipped.Reason)
 	}
 }
 
@@ -368,8 +288,8 @@ func TestConstraintMatchesNoVersions(t *testing.T) {
 		t.Fatal("Expected error for incompatible constraint, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "no versions satisfy the constraint") {
-		t.Errorf("Expected 'no versions satisfy the constraint' error, got: %v", err)
+	if !errors.Is(err, shared.ErrNoVersionsSatisfyConstraint) {
+		t.Errorf("Expected ErrNoVersionsSatisfyConstraint error, got: %v", err)
 	}
 
 	// Verify that even with the error, absoluteLatest is still returned

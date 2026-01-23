@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
@@ -19,8 +20,8 @@ func NewUpdater() *Updater {
 
 // UpdateDependencies updates dependencies in a package.json file using line-based updates
 func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, options shared.Options) error {
-	if options.Verbose && len(outdated) > 0 {
-		fmt.Printf("\n") // Add space before updates in verbose mode
+	if len(outdated) > 0 {
+		output.VerbosePrintf(options, "\n")
 	}
 
 	// If no dependencies to update, return early
@@ -65,9 +66,7 @@ func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.Ou
 		newLine := versionRegex.ReplaceAllString(line, fmt.Sprintf(`${1}"%s"`, newVersion))
 		lines[lineIndex] = newLine
 
-		if options.Verbose {
-			fmt.Printf("Updated %s (%s): %s -> %s\n", dependency.Name, dependency.Type.String(), oldVersion, newVersion)
-		}
+		output.VerbosePrintf(options, "Updated %s (%s): %s -> %s\n", dependency.Name, dependency.Type.String(), oldVersion, newVersion)
 	}
 
 	// Join lines back together and write to file

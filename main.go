@@ -66,9 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if options.Verbose {
-		fmt.Printf("Found %d dependencies\n", len(dependencies))
-	}
+	output.VerbosePrintf(options, "Found %d dependencies\n", len(dependencies))
 
 	var progressCallback func(current, total int)
 	if !options.Verbose {

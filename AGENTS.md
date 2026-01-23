@@ -76,7 +76,6 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 
 - Support ^, ~, >=, >, <, <=, and compound constraints (>=1.0.0 <2.0.0)
 - Filter out pre-release versions (alpha/beta/rc) unless explicitly requested
-- Use shared.IsSemverCompatible() for constraint checking
 - Use shared.CleanVersion() to strip prefixes before comparisons
 
 ## Code Patterns to Avoid

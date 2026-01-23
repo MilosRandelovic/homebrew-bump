@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
@@ -74,9 +75,7 @@ func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.Ou
 		newLine := versionRegex.ReplaceAllString(line, fmt.Sprintf(`${1}%s`, newVersion))
 		lines[lineIndex] = newLine
 
-		if options.Verbose {
-			fmt.Printf("Updated %s (%s): %s -> %s\n", dependency.Name, dependency.Type.String(), oldVersion, newVersion)
-		}
+		output.VerbosePrintf(options, "Updated %s (%s): %s -> %s\n", dependency.Name, dependency.Type.String(), oldVersion, newVersion)
 	}
 
 	// Join lines back together and write to file

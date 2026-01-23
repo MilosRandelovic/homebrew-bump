@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
@@ -32,9 +33,7 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 	if cache != nil {
 		key := shared.GenerateCacheKey(packageName, "pub", "", "*")
 		if entry, ok := cache.Get(key); ok {
-			if options.Verbose {
-				fmt.Printf("Cache hit: %s\n", packageName)
-			}
+			output.VerbosePrintf(options, "Cache hit: %s\n", packageName)
 			return entry.AbsoluteLatest, nil
 		}
 	}
@@ -71,9 +70,7 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 	if cache != nil {
 		key := shared.GenerateCacheKey(packageName, "pub", "", constraint)
 		if entry, ok := cache.Get(key); ok {
-			if options.Verbose {
-				fmt.Printf("Cache hit: %s\n", packageName)
-			}
+			output.VerbosePrintf(options, "Cache hit: %s\n", packageName)
 			return entry.AbsoluteLatest, entry.ConstraintLatest, nil
 		}
 	}

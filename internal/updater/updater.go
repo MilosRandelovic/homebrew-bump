@@ -1,12 +1,15 @@
 package updater
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/MilosRandelovic/homebrew-bump/internal/npm"
+	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/MilosRandelovic/homebrew-bump/internal/pub"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
@@ -14,7 +17,7 @@ import (
 // CheckOutdated checks which dependencies have newer versions available
 func CheckOutdated(dependencies []shared.Dependency, registryType shared.RegistryType, options shared.Options, progressCallback func(int, int)) (*shared.CheckResult, error) {
 	var outdated []shared.OutdatedDependency
-	var errors []shared.DependencyError
+	var dependencyErrors []shared.DependencyError
 	var semverSkipped []shared.SemverSkipped
 
 	// Initialize cache if not disabled
@@ -37,9 +40,7 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 	cwd, _ := os.Getwd()
 
 	// Add newline before checking phase in verbose mode
-	if options.Verbose {
-		fmt.Println()
-	}
+	output.VerbosePrintf(options, "\n")
 
 	for file, dependencies := range grouped {
 		displayPath := file
@@ -55,17 +56,13 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 
 			// Skip complex dependencies (git, path, workspace, etc.)
 			if strings.HasPrefix(dependency.Version, "git:") || strings.HasPrefix(dependency.Version, "path:") || dependency.Version == "complex" || dependency.Version == "*" {
-				if options.Verbose {
-					fmt.Printf("Skipping complex dependency: %s (%s)\n", dependency.Name, dependency.Version)
-				}
-				continue
-			}
+			output.VerbosePrintf(options, "Skipping complex dependency: %s (%s)\n", dependency.Name, dependency.Version)
+			continue
+		}
 
-			// If semver flag is enabled and it's a hardcoded version (no prefix), skip it
-			if options.Semver && shared.GetVersionPrefix(dependency.OriginalVersion) == "" {
-				if options.Verbose {
-					fmt.Printf("Skipping hardcoded version: %s (%s)\n", dependency.Name, dependency.OriginalVersion)
-				}
+		// If semver flag is enabled and it's a hardcoded version (no prefix), skip it
+		if options.Semver && shared.GetVersionPrefix(dependency.OriginalVersion) == "" {
+			output.VerbosePrintf(options, "Skipping hardcoded version: %s (%s)\n", dependency.Name, dependency.OriginalVersion)
 				// We don't need to fetch the latest version for hardcoded versions
 				semverSkipped = append(semverSkipped, shared.SemverSkipped{
 					OutdatedDependency: shared.OutdatedDependency{
@@ -80,7 +77,7 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 						CurrentVersion: dependency.Version,
 						LatestVersion:  "", // Not fetched
 					},
-					Reason: "hardcoded version",
+					Reason: shared.HardcodedVersion,
 				})
 				continue
 			}
@@ -94,7 +91,7 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 				absoluteLatest, constraintLatest, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, options, cache)
 				if err != nil {
 					// If constraint error, use the absolute latest already returned for semver skipped
-					if strings.Contains(err.Error(), "no versions satisfy the constraint") && absoluteLatest != "" {
+					if errors.Is(err, shared.ErrNoVersionsSatisfyConstraint) && absoluteLatest != "" {
 						// Add to semver skipped since constraint is incompatible but package exists
 						semverSkipped = append(semverSkipped, shared.SemverSkipped{
 							OutdatedDependency: shared.OutdatedDependency{
@@ -109,15 +106,13 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 								CurrentVersion: dependency.Version,
 								LatestVersion:  absoluteLatest,
 							},
-							Reason: "incompatible with constraint",
+							Reason: shared.IncompatibleWithConstraint,
 						})
 						continue
 					}
 					// If we can't get latest version or it's a different error, treat as error
-					if options.Verbose {
-						fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
-					}
-					errors = append(errors, shared.DependencyError{
+					output.VerbosePrintf(options, "Error checking %s: %v\n", dependency.Name, err)
+					dependencyErrors = append(dependencyErrors, shared.DependencyError{
 						Name:  dependency.Name,
 						Error: err.Error(),
 					})
@@ -125,38 +120,33 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 				}
 			} else {
 				// Check if current version is pre-release to determine which method to use
-				if strings.Contains(dependency.Version, "-") {
+				currentSemver, parseErr := semver.NewVersion(dependency.Version)
+				if parseErr == nil && currentSemver.Prerelease() != "" {
 					// Current version is pre-release, so we need to check all versions including pre-releases
 					// Use the original version as constraint (even if it has no prefix)
 					absoluteLatest, constraintLatest, err = registryClient.GetBothLatestVersions(dependency.Name, dependency.OriginalVersion, dependency.HostedURL, options, cache)
 					if err != nil {
 						// If constraint error for hardcoded pre-release, treat as up-to-date
-						if strings.Contains(err.Error(), "no versions satisfy the constraint") {
-							if options.Verbose {
-								fmt.Printf("No newer versions found for pre-release: %s (%s)\n", dependency.Name, dependency.OriginalVersion)
-							}
+						if errors.Is(err, shared.ErrNoVersionsSatisfyConstraint) {
+							output.VerbosePrintf(options, "No newer versions found for pre-release: %s (%s)\n", dependency.Name, dependency.OriginalVersion)
 							continue
 						}
-						errors = append(errors, shared.DependencyError{
+						dependencyErrors = append(dependencyErrors, shared.DependencyError{
 							Name:  dependency.Name,
 							Error: err.Error(),
 						})
-						if options.Verbose {
-							fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
-						}
+						output.VerbosePrintf(options, "Error checking %s: %v\n", dependency.Name, err)
 						continue
 					}
 				} else {
 					// Use absolute latest version fetching for stable versions (non-semver cases)
 					constraintLatest, err = registryClient.GetLatestVersionFromRegistry(dependency.Name, dependency.HostedURL, options, cache)
 					if err != nil {
-						errors = append(errors, shared.DependencyError{
+						dependencyErrors = append(dependencyErrors, shared.DependencyError{
 							Name:  dependency.Name,
 							Error: err.Error(),
 						})
-						if options.Verbose {
-							fmt.Printf("Error checking %s: %v\n", dependency.Name, err)
-						}
+						output.VerbosePrintf(options, "Error checking %s: %v\n", dependency.Name, err)
 						continue
 					}
 				}
@@ -193,7 +183,7 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 						CurrentVersion: currentVersion,
 						LatestVersion:  absoluteLatest,
 					},
-					Reason: "incompatible with constraint",
+					Reason: shared.IncompatibleWithConstraint,
 				})
 			}
 		}
@@ -203,14 +193,14 @@ func CheckOutdated(dependencies []shared.Dependency, registryType shared.Registr
 	if cache != nil {
 		// Clean expired entries before saving
 		cache.CleanExpiredEntries()
-		if err := cache.SaveEntries(); err != nil && options.Verbose {
-			fmt.Printf("Warning: Could not save cache: %v\n", err)
+		if err := cache.SaveEntries(); err != nil {
+			output.VerbosePrintf(options, "Warning: Could not save cache: %v\n", err)
 		}
 	}
 
 	return &shared.CheckResult{
 		Outdated:      outdated,
-		Errors:        errors,
+		Errors:        dependencyErrors,
 		SemverSkipped: semverSkipped,
 	}, nil
 }

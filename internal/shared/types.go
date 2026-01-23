@@ -1,6 +1,9 @@
 package shared
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // DependencyType represents the type of dependency
 type DependencyType int
@@ -45,6 +48,26 @@ func (registryType RegistryType) String() string {
 	}
 }
 
+// SkipReason represents the reason a dependency was skipped
+type SkipReason int
+
+const (
+	HardcodedVersion SkipReason = iota
+	IncompatibleWithConstraint
+)
+
+// String returns the string representation of SkipReason
+func (skipReason SkipReason) String() string {
+	switch skipReason {
+	case HardcodedVersion:
+		return "hardcoded version"
+	case IncompatibleWithConstraint:
+		return "incompatible with constraint"
+	default:
+		panic(fmt.Sprintf("unknown SkipReason: %d", skipReason))
+	}
+}
+
 // BaseDependency contains the core fields shared by all dependency types
 type BaseDependency struct {
 	Name            string         // Name of the package
@@ -71,7 +94,7 @@ type OutdatedDependency struct {
 // SemverSkipped represents a dependency that was skipped due to semver constraints
 type SemverSkipped struct {
 	OutdatedDependency
-	Reason string // Reason why the dependency was skipped
+	Reason SkipReason // Reason why the dependency was skipped
 }
 
 // CheckResult contains the results of checking dependencies
@@ -105,6 +128,12 @@ type Options struct {
 	IncludePeerDependencies bool
 	Monorepo                bool
 }
+
+// Custom error types for better error handling
+var (
+	// ErrNoVersionsSatisfyConstraint indicates that no versions match the given semver constraint
+	ErrNoVersionsSatisfyConstraint = errors.New("no versions satisfy the constraint")
+)
 
 // Parser interface defines the contract for parsing dependencies from files
 type Parser interface {

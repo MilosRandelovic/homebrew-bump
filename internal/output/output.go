@@ -293,6 +293,13 @@ func PrintUpdatePrompt(hasOutdated, semver bool) {
 	}
 }
 
+// VerbosePrintf prints formatted output only if verbose mode is enabled
+func VerbosePrintf(options shared.Options, format string, args ...any) {
+	if options.Verbose {
+		fmt.Printf(format, args...)
+	}
+}
+
 // PrintHelp displays the help message for the bump CLI tool
 func PrintHelp(version string) {
 	fmt.Printf("bump v%s - A utility to check and update dependencies\n\n", version)
