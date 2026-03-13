@@ -123,8 +123,8 @@ func parseNpmrcFile(filePath string) (*NpmConfig, error) {
 func getRegistryForPackage(packageName string, npmrcConfig *NpmConfig) string {
 	// Check if it's a scoped package
 	if strings.HasPrefix(packageName, "@") {
-		if idx := strings.Index(packageName[1:], "/"); idx != -1 {
-			scope := packageName[:idx+1] // Include @ but not the /
+		if index := strings.Index(packageName[1:], "/"); index != -1 {
+			scope := packageName[:index+1] // Include @ but not the /
 			if registry, exists := npmrcConfig.ScopeRegistries[scope]; exists {
 				return registry
 			}

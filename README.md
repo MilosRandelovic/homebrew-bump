@@ -11,6 +11,7 @@ A Go utility that parses `package.json` and `pubspec.yaml` files to check and up
 - Preserve version prefixes (^, ~, >=, etc.)
 - Optionally check for updates while respecting semver constraints
 - Optionally check for peer dependencies updates in `package.json`
+- Optional monorepo support for npm workspaces
 - Built in support for private registries and hosted packages
 - Uses cache when running multiple `bump` commands in quick succession
 
@@ -66,6 +67,21 @@ This mode will:
 - Skip packages with hardcoded versions (no prefix)
 - Skip updates that would violate semver rules
 
+### Parse monorepo workspaces
+
+```bash
+bump --monorepo
+# or
+bump -m
+```
+
+This mode will:
+
+- Detect workspaces from root `package.json` file
+- Parse all workspace packages matching glob patterns
+- Check and update dependencies across all workspace packages
+- Group output by file for clarity
+
 ### Enable verbose output
 
 ```bash
@@ -104,8 +120,9 @@ bump -V
 - `--update, -u`: Update dependencies to latest versions
 - `--semver, -s`: Respect semver constraints (^, ~) and skip hardcoded versions
 - `--verbose, -v`: Enable verbose output
-- `--include-peers, -P`: Include peer dependencies when updating (npm only)
 - `--no-cache, -C`: Disable caching of registry lookups
+- `--include-peers, -P`: Include peer dependencies when updating (npm only)
+- `--monorepo, -m`: Parse workspace packages in monorepo (npm only)
 - `--version, -V`: Show version information
 - `--help, -h`: Show help information
 
@@ -158,18 +175,32 @@ dev_dependencies:
   mockito: ^5.3.0
 ```
 
+### Example monorepo package.json
+
+```json
+{
+  "name": "my-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "dependencies": {
+    "typescript": "^5.0.0"
+  }
+}
+```
+
+With workspace packages in `packages/package-a/package.json`, `packages/package-b/package.json`, etc.
+
 ## Architecture
 
 The project is organized into the following packages:
 
 - `main.go`: CLI interface and application entry point
-- `internal/cli`: CLI-specific functionality (help text)
-- `internal/display`: Output formatting and color-coded display
+- `internal/output`: Output formatting, progress bars, and help text
 - `internal/parser`: Handles parsing and file detection for package.json and pubspec.yaml
 - `internal/updater`: Handles checking for updates and updating dependency files
 - `internal/shared`: Common types, utilities, and interfaces
-- `internal/npm`: npm-specific registry client and configuration
-- `internal/pub`: Dart/Flutter pub-specific registry client and configuration
+- `internal/npm`: npm-specific registry client, parser, and configuration
+- `internal/pub`: Dart/Flutter pub-specific registry client, parser, and configuration
 
 The CLI uses [spf13/pflag](https://github.com/spf13/pflag) for POSIX-compliant flag parsing with support for both long-form (`--flag`) and shorthand (`-f`) options, including merged shorthands (`-us`).
 

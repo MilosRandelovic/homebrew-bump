@@ -3,26 +3,26 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/MilosRandelovic/homebrew-bump/internal/parser"
+	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
 	"github.com/spf13/pflag"
 )
 
-const version = "1.2.0"
+const version = "1.3.0"
 
 func main() {
 	var (
 		update                  = pflag.BoolP("update", "u", false, "Update dependencies to latest versions")
 		verbose                 = pflag.BoolP("verbose", "v", false, "Enable verbose output")
+		semver                  = pflag.BoolP("semver", "s", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
+		noCache                 = pflag.BoolP("no-cache", "C", false, "Disable caching of registry lookups")
+		includePeerDependencies = pflag.BoolP("include-peers", "P", false, "Include peer dependencies when updating")
+		monorepo                = pflag.BoolP("monorepo", "m", false, "Parse workspace packages in monorepo")
 		showVersion             = pflag.BoolP("version", "V", false, "Show version information")
 		help                    = pflag.BoolP("help", "h", false, "Show help information")
-		semver                  = pflag.BoolP("semver", "s", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
-		includePeerDependencies = pflag.BoolP("include-peers", "P", false, "Include peer dependencies when updating")
-		noCache                 = pflag.BoolP("no-cache", "C", false, "Disable caching of registry lookups")
 	)
 	pflag.Parse()
 
@@ -42,85 +42,69 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Create options struct from flags
+	options := shared.Options{
+		Verbose:                 *verbose,
+		Update:                  *update,
+		Semver:                  *semver,
+		NoCache:                 *noCache,
+		IncludePeerDependencies: *includePeerDependencies,
+		Monorepo:                *monorepo,
+	}
+
 	// Auto-detect dependency file in current directory
-	filePath, fileType, err := parser.AutoDetectDependencyFile()
+	filePath, registryType, err := parser.AutoDetectDependencyFile(options)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if *verbose {
-		fmt.Printf("Found %s file: %s\n", fileType, filePath)
+	if err := validateOptionsForRegistry(options, registryType); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Parse the file
-	dependencies, err := parser.ParseDependencies(filePath, fileType, *includePeerDependencies)
+	dependencies, err := parser.ParseDependencies(filePath, registryType, options)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing file: %v\n", err)
 		os.Exit(1)
 	}
 
-	if *verbose {
-		fmt.Printf("Found %d dependencies\n", len(dependencies))
-	}
-
-	// Always check for outdated dependencies (and extract filename from path for display)
-	fmt.Printf("Checking %d dependencies from %s...\n", len(dependencies), filepath.Base(filePath))
+	output.VerbosePrintf(options, "Found %d dependencies\n", len(dependencies))
 
 	var progressCallback func(current, total int)
-	if !*verbose {
+	if !options.Verbose {
 		progressCallback = output.PrintProgressBar
 	}
 
-	result, err := updater.CheckOutdatedWithProgress(dependencies, fileType, *verbose, *semver, *noCache, progressCallback)
+	// Check for outdated dependencies
+	result, err := updater.CheckOutdated(dependencies, registryType, options, progressCallback)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 		os.Exit(1)
 	}
 
-	outdated := result.Outdated
-	errors := result.Errors
-	semverSkipped := result.SemverSkipped
-
-	// Sort outdated dependencies alphabetically by name
-	sort.Slice(outdated, func(i, j int) bool {
-		return outdated[i].Name < outdated[j].Name
-	})
-
-	// Sort errors alphabetically by name
-	sort.Slice(errors, func(i, j int) bool {
-		return errors[i].Name < errors[j].Name
-	})
-
-	// Sort semver skipped packages alphabetically by name
-	sort.Slice(semverSkipped, func(i, j int) bool {
-		return semverSkipped[i].Name < semverSkipped[j].Name
-	})
-
-	if len(outdated) == 0 && len(errors) == 0 && (!*semver || len(semverSkipped) == 0) {
+	if len(result.Outdated) == 0 && len(result.Errors) == 0 && (!options.Semver || len(result.SemverSkipped) == 0) {
 		fmt.Println("\nAll dependencies are up to date!")
 		return
 	}
 
-	if !*verbose {
-		fmt.Printf("\n") // Add new line after progress bar only in non-verbose mode
-	}
-
 	// Display results
-	output.PrintOutdatedDependencies(outdated, *verbose)
+	output.PrintOutdatedDependencies(result.Outdated, options)
 
 	// Display semver skipped summary if in semver mode and there were skipped packages
-	if *semver {
-		output.PrintSemverSkipped(semverSkipped, *verbose)
+	if options.Semver {
+		output.PrintSemverSkipped(result.SemverSkipped, options)
 	}
 
 	// Display error summary if there were errors
-	output.PrintErrors(errors, *verbose, *semver)
+	output.PrintErrors(result.Errors, options)
 
 	// Update if requested
-	if *update {
-		if len(outdated) > 0 {
-			err := updater.UpdateDependencies(filePath, outdated, fileType, *verbose, *semver, *includePeerDependencies)
+	if options.Update {
+		if len(result.Outdated) > 0 {
+			err := updater.UpdateDependencies(filePath, result.Outdated, registryType, options)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\nError updating dependencies: %v\n", err)
 				os.Exit(1)
@@ -130,6 +114,18 @@ func main() {
 			fmt.Println("\nNo dependencies to update.")
 		}
 	} else {
-		output.PrintUpdatePrompt(len(outdated) > 0, *semver)
+		output.PrintUpdatePrompt(len(result.Outdated) > 0, options.Semver)
 	}
+}
+
+func validateOptionsForRegistry(options shared.Options, registryType shared.RegistryType) error {
+	if registryType == shared.Pub && options.IncludePeerDependencies {
+		return fmt.Errorf("peer dependencies are not supported by pub")
+	}
+
+	if registryType == shared.Pub && options.Monorepo {
+		return fmt.Errorf("monorepo mode is only supported for npm projects")
+	}
+
+	return nil
 }

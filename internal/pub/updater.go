@@ -2,95 +2,70 @@ package pub
 
 import (
 	"fmt"
-	"os"
 	"regexp"
-	"strings"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
+// PatternProvider implements the pattern provider for pub pubspec.yaml files
+type PatternProvider struct{}
+
+// GetPattern returns the regex pattern for matching pub dependency lines
+func (patternProvider *PatternProvider) GetPattern(dependency shared.OutdatedDependency) string {
+	// For hosted packages, match the version line
+	// For simple packages, match the package name line
+	if dependency.HostedURL != "" {
+		return `(\s*version\s*:\s*)([^\s#]+)`
+	}
+	escapedName := regexp.QuoteMeta(dependency.Name)
+	return fmt.Sprintf(`(\s*%s\s*:\s*)([^\s#]+)`, escapedName)
+}
+
+// GetReplacement returns the replacement string for pub dependency lines
+func (patternProvider *PatternProvider) GetReplacement(dependency shared.OutdatedDependency, newVersion string) string {
+	return fmt.Sprintf(`${1}%s`, newVersion)
+}
+
 // Updater handles Dart pubspec.yaml updating
-type Updater struct{}
+type Updater struct {
+	patternProvider *PatternProvider
+}
 
 // NewUpdater creates a new Dart updater
 func NewUpdater() *Updater {
-	return &Updater{}
+	return &Updater{
+		patternProvider: &PatternProvider{},
+	}
 }
 
-// UpdateDependencies updates dependencies in a pubspec.yaml file using line-based updates
-func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, verbose bool, semver bool, includePeerDependencies bool) error {
+// GetPatternProvider returns the pattern provider for pub
+func (updater *Updater) GetPatternProvider() shared.PatternProvider {
+	if updater.patternProvider == nil {
+		updater.patternProvider = &PatternProvider{}
+	}
+	return updater.patternProvider
+}
+
+// GetRegistryType returns the registry type this updater handles
+func (updater *Updater) GetRegistryType() shared.RegistryType {
+	return shared.Pub
+}
+
+// ValidateOptions validates options for pub updates
+func (updater *Updater) ValidateOptions(options shared.Options) error {
 	// Pub ecosystem doesn't support peer dependencies
-	if includePeerDependencies {
+	if options.IncludePeerDependencies {
 		return fmt.Errorf("peer dependencies are not supported by pub")
 	}
-
-	// If no dependencies to update, return early
-	if len(outdated) == 0 {
-		return nil
-	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
-
-	// Split content into lines
-	lines := strings.Split(string(data), "\n")
-
-	// Update each dependency by modifying its specific line
-	for _, dependency := range outdated {
-		if dependency.LineNumber < 1 || dependency.LineNumber > len(lines) {
-			return fmt.Errorf("invalid line number %d for dependency %s", dependency.LineNumber, dependency.Name)
-		}
-
-		lineIndex := dependency.LineNumber - 1 // Convert to 0-based index
-		line := lines[lineIndex]
-
-		// Simple regex to replace the version on this specific line
-		// For hosted packages, this will be the "version: ^x.y.z" line
-		// For simple packages, this will be the "package-name: ^x.y.z" line
-		var pattern string
-		if dependency.HostedURL != "" {
-			// For hosted packages, match the version line
-			pattern = `(\s*version\s*:\s*)([^\s#]+)`
-		} else {
-			// For simple packages, match the package name line
-			escapedName := regexp.QuoteMeta(dependency.Name)
-			pattern = fmt.Sprintf(`(\s*%s\s*:\s*)([^\s#]+)`, escapedName)
-		}
-
-		versionRegex := regexp.MustCompile(pattern)
-		matches := versionRegex.FindStringSubmatch(line)
-
-		if len(matches) < 3 {
-			return fmt.Errorf("could not find %s on line %d for updating", dependency.Name, dependency.LineNumber)
-		}
-
-		oldVersion := matches[2]
-		prefix := shared.GetVersionPrefix(oldVersion)
-		newVersion := prefix + dependency.LatestVersion
-
-		// Replace the version on this line
-		newLine := versionRegex.ReplaceAllString(line, fmt.Sprintf(`${1}%s`, newVersion))
-		lines[lineIndex] = newLine
-
-		if verbose {
-			fmt.Printf("Updated %s (%s): %s -> %s\n", dependency.Name, dependency.Type.String(), oldVersion, newVersion)
-		}
-	}
-
-	// Join lines back together and write to file
-	content := strings.Join(lines, "\n")
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
 	return nil
 }
 
-// GetFileType returns the file type this updater handles
-func (updater *Updater) GetFileType() string {
-	return "pub"
+// UpdateDependencies updates dependencies in a file - thin wrapper for tests that delegates to shared logic
+func (updater *Updater) UpdateDependencies(filePath string, outdated []shared.OutdatedDependency, options shared.Options) error {
+	if err := updater.ValidateOptions(options); err != nil {
+		return err
+	}
+	return shared.UpdateDependenciesInFile(filePath, outdated, updater.GetPatternProvider(), options)
 }
 
 // Ensure Updater implements the interface

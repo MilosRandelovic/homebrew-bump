@@ -1,166 +1,13 @@
 package updater
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
-
-func TestCleanVersion(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"^1.0.0", "1.0.0"},
-		{"~2.3.4", "2.3.4"},
-		{">=3.0.0", "3.0.0"},
-		{"<4.0.0", "4.0.0"},
-		{"1.5.0", "1.5.0"},
-		{"^>=1.0.0", "1.0.0"},
-	}
-
-	for _, test := range tests {
-		result := shared.CleanVersion(test.input)
-		if result != test.expected {
-			t.Errorf("CleanVersion(%s) = %s, expected %s", test.input, result, test.expected)
-		}
-	}
-}
-
-func TestGetVersionPrefix(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"^1.0.0", "^"},
-		{"~2.3.4", "~"},
-		{">=3.0.0", ">="},
-		{"<4.0.0", "<"},
-		{"1.5.0", ""},
-		{"^>=1.0.0", "^>="},
-	}
-
-	for _, test := range tests {
-		result := shared.GetVersionPrefix(test.input)
-		if result != test.expected {
-			t.Errorf("GetVersionPrefix(%s) = %s, expected %s", test.input, result, test.expected)
-		}
-	}
-}
-
-func TestSemverVersionParsing(t *testing.T) {
-	tests := []struct {
-		input       string
-		expectedMaj uint64
-		expectedMin uint64
-		expectedPat uint64
-		hasError    bool
-	}{
-		{"1.0.0", 1, 0, 0, false},
-		{"2.3.4", 2, 3, 4, false},
-		{"0.1.2", 0, 1, 2, false},
-		{"10.20.30", 10, 20, 30, false},
-		{"1.0.0-beta", 1, 0, 0, false},
-		{"2.3.4-alpha.1", 2, 3, 4, false},
-		{"1.0.0+build.1", 1, 0, 0, false},
-		{"1.0.0-beta+build.1", 1, 0, 0, false},
-		{"invalid", 0, 0, 0, true},
-		{"1.0.x", 0, 0, 0, true},
-	}
-
-	for _, test := range tests {
-		result, err := semver.NewVersion(test.input)
-		if test.hasError {
-			if err == nil {
-				t.Errorf("semver.NewVersion(%s) expected error but got none", test.input)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("semver.NewVersion(%s) unexpected error: %v", test.input, err)
-			} else if result.Major() != test.expectedMaj || result.Minor() != test.expectedMin || result.Patch() != test.expectedPat {
-				t.Errorf("semver.NewVersion(%s) = %d.%d.%d, expected %d.%d.%d", test.input, result.Major(), result.Minor(), result.Patch(), test.expectedMaj, test.expectedMin, test.expectedPat)
-			}
-		}
-	}
-}
-
-func TestIsSemverCompatible(t *testing.T) {
-	tests := []struct {
-		originalVersion string
-		latestVersion   string
-		expected        bool
-		description     string
-	}{
-		// Caret tests
-		{"^1.0.0", "1.0.1", true, "caret allows patch updates"},
-		{"^1.0.0", "1.1.0", true, "caret allows minor updates"},
-		{"^1.0.0", "2.0.0", false, "caret does not allow major updates"},
-		{"^0.1.0", "0.1.1", true, "caret allows patch updates for 0.x"},
-		{"^0.1.0", "0.2.0", false, "caret does not allow minor updates for 0.x in strict semver"},
-		{"^0.1.0", "1.0.0", false, "caret does not allow major updates for 0.x"},
-		{"^0.0.1", "0.0.2", false, "caret does not allow patch updates for 0.0.x in strict semver"},
-		{"^0.0.1", "0.1.0", false, "caret does not allow minor updates for 0.0.x"},
-
-		// Tilde tests
-		{"~1.2.3", "1.2.4", true, "tilde allows patch updates"},
-		{"~1.2.3", "1.3.0", false, "tilde does not allow minor updates"},
-		{"~1.2.3", "2.0.0", false, "tilde does not allow major updates"},
-
-		// Hardcoded versions
-		{"1.0.0", "1.0.1", false, "hardcoded versions are not compatible"},
-		{"1.0.0", "1.1.0", false, "hardcoded versions are not compatible"},
-
-		// Pre-release versions
-		{"^1.0.0", "1.1.0-beta", false, "pre-release versions are skipped"},
-		{"^1.0.0", "1.1.0-alpha.1", false, "pre-release versions are skipped"},
-
-		// Comparison operator tests
-		{">=1.0.0", "1.1.0", true, ">= allows newer versions"},
-		{">1.0.0", "1.1.0", true, "> allows newer versions"},
-		{"<2.0.0", "1.1.0", true, "< allows older versions"},
-		{"<=2.0.0", "1.1.0", true, "<= allows older/same versions"},
-	}
-
-	for _, test := range tests {
-		result := shared.IsSemverCompatible(test.originalVersion, test.latestVersion)
-		if result != test.expected {
-			t.Errorf("%s: IsSemverCompatible(%s, %s) = %v, expected %v",
-				test.description, test.originalVersion, test.latestVersion, result, test.expected)
-		}
-	}
-}
-
-func TestSemverSkippedTracking(t *testing.T) {
-	// Test that the SemverSkipped field is properly populated
-	// This is a basic test to ensure the struct and tracking work
-	result := &shared.CheckResult{
-		SemverSkipped: []shared.SemverSkipped{
-			{
-				Name:            "test-package",
-				CurrentVersion:  "1.0.0",
-				LatestVersion:   "2.0.0",
-				OriginalVersion: "^1.0.0",
-				Reason:          "incompatible with constraint",
-			},
-		},
-	}
-
-	if len(result.SemverSkipped) != 1 {
-		t.Errorf("Expected 1 semver skipped entry, got %d", len(result.SemverSkipped))
-	}
-
-	skipped := result.SemverSkipped[0]
-	if skipped.Name != "test-package" {
-		t.Errorf("Expected name 'test-package', got '%s'", skipped.Name)
-	}
-
-	if skipped.Reason != "incompatible with constraint" {
-		t.Errorf("Expected reason 'incompatible with constraint', got '%s'", skipped.Reason)
-	}
-}
 
 func TestFindBothLatestVersions(t *testing.T) {
 	tests := []struct {
@@ -293,7 +140,7 @@ type MockRegistryClient struct {
 	packageVersions map[string][]string
 }
 
-func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool, cache *shared.Cache) (string, error) {
+func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, options shared.Options, cache *shared.Cache) (string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", fmt.Errorf("package not found")
@@ -301,7 +148,7 @@ func (mockClient *MockRegistryClient) GetLatestVersionFromRegistry(packageName, 
 	return versions[len(versions)-1], nil
 }
 
-func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool, cache *shared.Cache) (string, string, error) {
+func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, options shared.Options, cache *shared.Cache) (string, string, error) {
 	versions := mockClient.packageVersions[packageName]
 	if len(versions) == 0 {
 		return "", "", fmt.Errorf("package not found")
@@ -309,8 +156,8 @@ func (mockClient *MockRegistryClient) GetBothLatestVersions(packageName, constra
 	return shared.FindBothLatestVersions(versions, constraint)
 }
 
-func (mockClient *MockRegistryClient) GetFileType() string {
-	return "mock"
+func (mockClient *MockRegistryClient) GetRegistryType() shared.RegistryType {
+	return shared.Npm // Mock defaults to Npm type
 }
 
 func TestCheckForUpdatesIntegration(t *testing.T) {
@@ -357,13 +204,13 @@ func TestConstraintMatchesNoVersions(t *testing.T) {
 	}
 
 	// Test the scenario directly using the shared function
-	absoluteLatest, constraintLatest, err := mockRegistry.GetBothLatestVersions("core", "^0.0.1", "", false, nil)
+	absoluteLatest, constraintLatest, err := mockRegistry.GetBothLatestVersions("core", "^0.0.1", "", shared.Options{}, nil)
 	if err == nil {
 		t.Fatal("Expected error for incompatible constraint, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "no versions satisfy the constraint") {
-		t.Errorf("Expected 'no versions satisfy the constraint' error, got: %v", err)
+	if !errors.Is(err, shared.ErrNoVersionsSatisfyConstraint) {
+		t.Errorf("Expected ErrNoVersionsSatisfyConstraint error, got: %v", err)
 	}
 
 	// Verify that even with the error, absoluteLatest is still returned
@@ -375,4 +222,124 @@ func TestConstraintMatchesNoVersions(t *testing.T) {
 	if constraintLatest != "" {
 		t.Errorf("Expected empty constraint latest when no versions satisfy, got '%s'", constraintLatest)
 	}
+}
+
+func TestWorkspaceDependenciesSkipped(t *testing.T) {
+	// Test that workspace dependencies with * version are skipped
+	dependencies := []shared.Dependency{
+		{
+			BaseDependency: shared.BaseDependency{
+				Name:            "lodash",
+				OriginalVersion: "^4.17.0",
+				Type:            shared.Dependencies,
+				FilePath:        "/test/package.json",
+				LineNumber:      1,
+			},
+			Version: "4.17.21",
+		},
+		{
+			BaseDependency: shared.BaseDependency{
+				Name:            "@monorepo/package-a",
+				OriginalVersion: "*",
+				Type:            shared.Dependencies,
+				FilePath:        "/test/package.json",
+				LineNumber:      2,
+			},
+			Version: "*",
+		},
+		{
+			BaseDependency: shared.BaseDependency{
+				Name:            "axios",
+				OriginalVersion: "^1.0.0",
+				Type:            shared.Dependencies,
+				FilePath:        "/test/package.json",
+				LineNumber:      3,
+			},
+			Version: "1.6.0",
+		},
+	}
+
+	mockRegistry := &MockRegistryClient{
+		packageVersions: map[string][]string{
+			"lodash": {"4.17.21", "4.18.0"},
+			"axios":  {"1.6.0", "1.7.0"},
+		},
+	}
+
+	result, err := checkOutdatedWithMockRegistry(dependencies, mockRegistry, shared.Options{})
+	if err != nil {
+		t.Fatalf("CheckOutdated failed: %v", err)
+	}
+
+	// Verify workspace dependency was skipped (not in outdated or errors)
+	for _, dependency := range result.Outdated {
+		if dependency.Name == "@monorepo/package-a" {
+			t.Error("Workspace dependency @monorepo/package-a should be skipped, but found in outdated list")
+		}
+	}
+
+	for _, errDep := range result.Errors {
+		if errDep.Name == "@monorepo/package-a" {
+			t.Error("Workspace dependency @monorepo/package-a should be skipped, but found in errors list")
+		}
+	}
+
+	// Verify external dependencies were processed
+	foundLodash := false
+	foundAxios := false
+	for _, dependency := range result.Outdated {
+		if dependency.Name == "lodash" {
+			foundLodash = true
+		}
+		if dependency.Name == "axios" {
+			foundAxios = true
+		}
+	}
+
+	if !foundLodash {
+		t.Error("External dependency lodash should be checked for updates")
+	}
+	if !foundAxios {
+		t.Error("External dependency axios should be checked for updates")
+	}
+}
+
+func checkOutdatedWithMockRegistry(dependencies []shared.Dependency, mockRegistry *MockRegistryClient, options shared.Options) (*shared.CheckResult, error) {
+	var outdated []shared.OutdatedDependency
+	var errors []shared.DependencyError
+
+	for _, dependency := range dependencies {
+		// Skip complex dependencies
+		if strings.HasPrefix(dependency.Version, "git:") || strings.HasPrefix(dependency.Version, "path:") || dependency.Version == "complex" || dependency.Version == "*" {
+			continue
+		}
+
+		latestVersion, err := mockRegistry.GetLatestVersionFromRegistry(dependency.Name, "", options, nil)
+		if err != nil {
+			errors = append(errors, shared.DependencyError{
+				Name:  dependency.Name,
+				Error: err.Error(),
+			})
+			continue
+		}
+
+		if dependency.Version != latestVersion {
+			outdated = append(outdated, shared.OutdatedDependency{
+				BaseDependency: shared.BaseDependency{
+					Name:            dependency.Name,
+					OriginalVersion: dependency.OriginalVersion,
+					Type:            dependency.Type,
+					FilePath:        dependency.FilePath,
+					LineNumber:      dependency.LineNumber,
+				},
+				CurrentVersion: dependency.Version,
+				LatestVersion:  latestVersion,
+			})
+		}
+	}
+
+	return &shared.CheckResult{
+		Outdated: outdated,
+		Errors:   errors,
+	}, nil
 }

@@ -9,10 +9,14 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
+var (
+	versionPrefixRegex        = regexp.MustCompile(`^[\^~>=<]+`)
+	versionPrefixCaptureRegex = regexp.MustCompile(`^([\^~>=<]+)`)
+)
+
 // CleanVersion removes prefix characters (^, ~, >=, etc.) from version strings
 func CleanVersion(version string) string {
-	prefixRegex := regexp.MustCompile(`^[\^~>=<]+`)
-	return prefixRegex.ReplaceAllString(version, "")
+	return versionPrefixRegex.ReplaceAllString(version, "")
 }
 
 // HasSemanticPrefix checks if version has semantic versioning prefix
@@ -67,36 +71,11 @@ func HasSemanticPrefix(version string) bool {
 
 // GetVersionPrefix returns the prefix of a version string (^, ~, >=, etc.)
 func GetVersionPrefix(version string) string {
-	prefixRegex := regexp.MustCompile(`^([\^~>=<]+)`)
-	matches := prefixRegex.FindStringSubmatch(version)
+	matches := versionPrefixCaptureRegex.FindStringSubmatch(version)
 	if len(matches) > 1 {
 		return matches[1]
 	}
 	return ""
-}
-
-// IsSemverCompatible checks if a target version satisfies a semver constraint
-func IsSemverCompatible(constraint, targetVersion string) bool {
-	// Handle the case where constraint has no prefix (exact version)
-	if GetVersionPrefix(constraint) == "" {
-		cleanConstraint := CleanVersion(constraint)
-		cleanTarget := CleanVersion(targetVersion)
-		return cleanConstraint == cleanTarget
-	}
-
-	// Parse the constraint using Masterminds semver
-	c, err := semver.NewConstraint(constraint)
-	if err != nil {
-		return false
-	}
-
-	// Parse the target version
-	v, err := semver.NewVersion(targetVersion)
-	if err != nil {
-		return false
-	}
-
-	return c.Check(v)
 }
 
 // FindBothLatestVersions finds both the absolute latest version and the latest version satisfying a constraint
@@ -108,10 +87,14 @@ func FindBothLatestVersions(versions []string, constraint string) (string, strin
 
 	// Check if the current version (from constraint) is a pre-release
 	currentVersion := CleanVersion(constraint)
+	currentSemver, err := semver.NewVersion(currentVersion)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid current version: %s", currentVersion)
+	}
 
-	// Parse versions using Masterminds semver
-	var semverVersions []*semver.Version
-	var versionMap = make(map[string]string) // semver string -> original string
+	// Parse versions using semver and build map from semver string to original
+	var collection semver.Collection
+	versionMap := make(map[string]string) // semver string -> original string
 
 	for _, v := range versions {
 		sv, err := semver.NewVersion(v)
@@ -119,77 +102,62 @@ func FindBothLatestVersions(versions []string, constraint string) (string, strin
 			// Skip invalid versions
 			continue
 		}
-		semverVersions = append(semverVersions, sv)
+		collection = append(collection, sv)
 		versionMap[sv.String()] = v
 	}
 
-	if len(semverVersions) == 0 {
+	if len(collection) == 0 {
 		return "", "", fmt.Errorf("no valid semver versions found")
 	}
 
-	// Parse current version to check if it's pre-release
-	currentSemver, err := semver.NewVersion(currentVersion)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid current version: %s", currentVersion)
-	}
+	// Sort versions using semver.Collection's built-in sort
+	sort.Sort(collection)
 
+	// Determine if we should include prereleases based on current version
 	includePrerelease := currentSemver.Prerelease() != ""
 
-	// Filter versions based on whether current version is pre-release
-	var filteredVersions []*semver.Version
-	for _, sv := range semverVersions {
-		if includePrerelease {
-			// If current is pre-release, include all versions
-			filteredVersions = append(filteredVersions, sv)
-		} else {
-			// If current is stable, only include stable versions
-			if sv.Prerelease() == "" {
-				filteredVersions = append(filteredVersions, sv)
-			}
+	// Find absolute latest (stable or prerelease depending on current version)
+	var absoluteLatest string
+	for i := len(collection) - 1; i >= 0; i-- {
+		if includePrerelease || collection[i].Prerelease() == "" {
+			absoluteLatest = versionMap[collection[i].String()]
+			break
 		}
 	}
 
-	if len(filteredVersions) == 0 {
+	if absoluteLatest == "" {
 		if includePrerelease {
 			return "", "", fmt.Errorf("no versions available")
-		} else {
-			return "", "", fmt.Errorf("no stable versions available")
 		}
+		return "", "", fmt.Errorf("no stable versions available")
 	}
 
-	// Sort versions
-	sort.Slice(filteredVersions, func(i, j int) bool {
-		return filteredVersions[i].LessThan(filteredVersions[j])
-	})
-
-	// Absolute latest is the last in sorted filtered versions
-	absoluteLatest := versionMap[filteredVersions[len(filteredVersions)-1].String()]
-
-	// Find latest satisfying constraint
-	var constraintLatest string
-
-	// Parse the constraint using Masterminds semver
+	// Parse the constraint
 	constraintStr := constraint
 	if GetVersionPrefix(constraint) == "" {
 		// No prefix means exact version, we want newer versions
 		constraintStr = ">" + currentVersion
 	}
 
-	c, err := semver.NewConstraint(constraintStr)
+	constraintObj, err := semver.NewConstraint(constraintStr)
 	if err != nil {
 		return absoluteLatest, "", fmt.Errorf("invalid constraint: %s", constraintStr)
 	}
 
-	// Find the latest version that satisfies the constraint
-	for i := len(filteredVersions) - 1; i >= 0; i-- {
-		if c.Check(filteredVersions[i]) {
-			constraintLatest = versionMap[filteredVersions[i].String()]
+	// Set IncludePrerelease based on current version
+	constraintObj.IncludePrerelease = includePrerelease
+
+	// Find latest satisfying constraint (iterate from end since collection is sorted)
+	var constraintLatest string
+	for i := len(collection) - 1; i >= 0; i-- {
+		if constraintObj.Check(collection[i]) {
+			constraintLatest = versionMap[collection[i].String()]
 			break
 		}
 	}
 
 	if constraintLatest == "" {
-		return absoluteLatest, "", fmt.Errorf("no versions satisfy the constraint %s", constraint)
+		return absoluteLatest, "", fmt.Errorf("%w: %s", ErrNoVersionsSatisfyConstraint, constraint)
 	}
 
 	return absoluteLatest, constraintLatest, nil

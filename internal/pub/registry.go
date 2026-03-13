@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
 )
 
@@ -27,19 +29,22 @@ func NewRegistryClient() *RegistryClient {
 }
 
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
-func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, verbose bool, cache *shared.Cache) (string, error) {
+func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, options shared.Options, cache *shared.Cache) (string, error) {
+	targetRegistry, err := client.resolveRegistry(registryURL)
+	if err != nil {
+		return "", err
+	}
+
 	// Check cache first if enabled
 	if cache != nil {
-		key := shared.GenerateCacheKey(packageName, "pub", "", "*")
+		key := shared.GenerateCacheKey(packageName, "pub", targetRegistry.URL, "", "*")
 		if entry, ok := cache.Get(key); ok {
-			if verbose {
-				fmt.Printf("Cache hit: %s\n", packageName)
-			}
+			output.VerbosePrintf(options, "Cache hit: %s\n", packageName)
 			return entry.AbsoluteLatest, nil
 		}
 	}
 
-	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
+	body, err := client.fetchPackageInfo(packageName, targetRegistry, options)
 	if err != nil {
 		return "", err
 	}
@@ -54,6 +59,7 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 		entry := shared.CacheEntry{
 			PackageName:      packageName,
 			Type:             "pub",
+			Registry:         targetRegistry.URL,
 			CurrentVersion:   "",
 			Constraint:       "*",
 			AbsoluteLatest:   packageInfo.Latest.Version,
@@ -66,19 +72,22 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 }
 
 // GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
-func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, verbose bool, cache *shared.Cache) (string, string, error) {
+func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, options shared.Options, cache *shared.Cache) (string, string, error) {
+	targetRegistry, err := client.resolveRegistry(registryURL)
+	if err != nil {
+		return "", "", err
+	}
+
 	// Check cache first if enabled
 	if cache != nil {
-		key := shared.GenerateCacheKey(packageName, "pub", "", constraint)
+		key := shared.GenerateCacheKey(packageName, "pub", targetRegistry.URL, "", constraint)
 		if entry, ok := cache.Get(key); ok {
-			if verbose {
-				fmt.Printf("Cache hit: %s\n", packageName)
-			}
+			output.VerbosePrintf(options, "Cache hit: %s\n", packageName)
 			return entry.AbsoluteLatest, entry.ConstraintLatest, nil
 		}
 	}
 
-	body, err := client.fetchPackageInfo(packageName, registryURL, verbose)
+	body, err := client.fetchPackageInfo(packageName, targetRegistry, options)
 	if err != nil {
 		return "", "", err
 	}
@@ -109,6 +118,7 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 		entry := shared.CacheEntry{
 			PackageName:      packageName,
 			Type:             "pub",
+			Registry:         targetRegistry.URL,
 			CurrentVersion:   "",
 			Constraint:       constraint,
 			AbsoluteLatest:   absoluteLatest,
@@ -121,43 +131,33 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 	return absoluteLatest, constraintLatest, nil
 }
 
-// fetchPackageInfo is a shared method to fetch package information from registries
-func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbose bool) ([]byte, error) {
-	// Parse pub configuration
+func (client *RegistryClient) resolveRegistry(registryURL string) (RegistryConfig, error) {
 	config, err := parsePubConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse pub config: %w", err)
+		return RegistryConfig{}, fmt.Errorf("failed to parse pub config: %w", err)
 	}
-
-	var targetRegistry *RegistryConfig
-	var url string
 
 	if registryURL != "" {
-		// Use specified registry
 		hostname := shared.ExtractHostname(registryURL)
-		if regConfig, exists := config.Registries[hostname]; exists {
-			targetRegistry = &regConfig
-		} else {
-			// Create temporary config for this registry
-			targetRegistry = &RegistryConfig{
-				URL: registryURL,
-			}
+		if registryConfig, exists := config.Registries[hostname]; exists {
+			return registryConfig, nil
 		}
-		url = fmt.Sprintf("%s/api/packages/%s", targetRegistry.URL, packageName)
-	} else {
-		// Use default pub.dev registry
-		if pubDevConfig, exists := config.Registries["pub.dev"]; exists {
-			targetRegistry = &pubDevConfig
-		} else {
-			targetRegistry = &RegistryConfig{
-				URL: "https://pub.dev",
-			}
-		}
-		url = fmt.Sprintf("%s/api/packages/%s", targetRegistry.URL, packageName)
+		return RegistryConfig{URL: registryURL}, nil
 	}
 
-	if verbose {
-		fmt.Printf("Checking PUB package: %s (registry: %s)\n", packageName, targetRegistry.URL)
+	if pubDevConfig, exists := config.Registries["pub.dev"]; exists {
+		return pubDevConfig, nil
+	}
+
+	return RegistryConfig{URL: "https://pub.dev"}, nil
+}
+
+// fetchPackageInfo is a shared method to fetch package information from registries
+func (client *RegistryClient) fetchPackageInfo(packageName string, targetRegistry RegistryConfig, options shared.Options) ([]byte, error) {
+	url := fmt.Sprintf("%s/api/packages/%s", strings.TrimRight(targetRegistry.URL, "/"), packageName)
+
+	if options.Verbose {
+		fmt.Printf("Checking pub package: %s (registry: %s)\n", packageName, targetRegistry.URL)
 	}
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}
@@ -169,7 +169,7 @@ func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, 
 	// Add authentication if available for this registry
 	if targetRegistry.AuthToken != "" {
 		request.Header.Set("Authorization", "Bearer "+targetRegistry.AuthToken)
-		if verbose {
+		if options.Verbose {
 			fmt.Printf("Using authentication for registry: %s\n", targetRegistry.URL)
 		}
 	}
@@ -192,9 +192,9 @@ func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, 
 	return body, nil
 }
 
-// GetFileType returns the file type this registry client handles
-func (client *RegistryClient) GetFileType() string {
-	return "pub"
+// GetRegistryType returns the registry type this client handles
+func (client *RegistryClient) GetRegistryType() shared.RegistryType {
+	return shared.Pub
 }
 
 // Ensure RegistryClient implements the interface

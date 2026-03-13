@@ -9,22 +9,22 @@ import (
 )
 
 // ParseDependencies parses dependencies from a file based on its type
-func ParseDependencies(filePath, fileType string, includePeerDependencies bool) ([]shared.Dependency, error) {
-	parser, err := getParser(fileType)
+func ParseDependencies(filePath string, registryType shared.RegistryType, options shared.Options) ([]shared.Dependency, error) {
+	parser, err := getParser(registryType)
 	if err != nil {
 		return nil, err
 	}
-	return parser.ParseDependencies(filePath, includePeerDependencies)
+	return parser.ParseDependencies(filePath, options)
 }
 
 // getParser returns the appropriate parser for the given file type
-func getParser(fileType string) (shared.Parser, error) {
-	switch fileType {
-	case "npm":
+func getParser(registryType shared.RegistryType) (shared.Parser, error) {
+	switch registryType {
+	case shared.Npm:
 		return npm.NewParser(), nil
-	case "pub":
+	case shared.Pub:
 		return pub.NewParser(), nil
 	default:
-		return nil, fmt.Errorf("unsupported file type: %s", fileType)
+		return nil, fmt.Errorf("unsupported registry type: %s", registryType)
 	}
 }

@@ -17,7 +17,7 @@ func NewParser() *Parser {
 }
 
 // ParseDependencies parses a pubspec.yaml file and extracts dependencies
-func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies bool) ([]shared.Dependency, error) {
+func (parser *Parser) ParseDependencies(filePath string, options shared.Options) ([]shared.Dependency, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -33,12 +33,13 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 
 	for lineNumber, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
+		indent := getIndentation(line)
 
 		// Check if we're entering a dependency section
 		if strings.HasPrefix(trimmedLine, "dependencies:") {
 			// Finalize any pending package from previous section
 			if currentPackage != nil {
-				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+				if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
 					dependencies = append(dependencies, *dependency)
 				}
 			}
@@ -49,7 +50,7 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 		} else if strings.HasPrefix(trimmedLine, "dev_dependencies:") {
 			// Finalize any pending package from previous section
 			if currentPackage != nil {
-				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+				if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
 					dependencies = append(dependencies, *dependency)
 				}
 			}
@@ -63,7 +64,7 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 		if inSection && len(line) > 0 && line[0] != ' ' && line[0] != '\t' && trimmedLine != "" && !strings.HasPrefix(trimmedLine, "#") {
 			// Finalize any pending package
 			if currentPackage != nil {
-				if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+				if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
 					dependencies = append(dependencies, *dependency)
 				}
 				currentPackage = nil
@@ -79,10 +80,10 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 				value := strings.TrimSpace(parts[1])
 
 				// Check if this is a top-level package name (2 spaces indentation)
-				if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
+				if indent == 2 {
 					// Finalize previous package if any
 					if currentPackage != nil {
-						if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+						if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
 							dependencies = append(dependencies, *dependency)
 						}
 					}
@@ -97,7 +98,7 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 						// Simple dependency (name: version)
 						currentPackage.version = cleanQuotes(value)
 					}
-				} else if strings.HasPrefix(line, "    ") {
+				} else if indent >= 4 {
 					// This is a sub-property of the current package (4+ spaces indentation)
 					if currentPackage != nil {
 						switch key {
@@ -105,7 +106,14 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 							currentPackage.version = cleanQuotes(value)
 							currentPackage.versionLineNumber = lineNumber + 1
 						case "hosted":
-							currentPackage.hostedURL = cleanQuotes(value)
+							currentPackage.inHostedBlock = value == ""
+							if value != "" {
+								currentPackage.hostedURL = cleanQuotes(value)
+							}
+						case "url":
+							if currentPackage.inHostedBlock && indent >= 6 {
+								currentPackage.hostedURL = cleanQuotes(value)
+							}
 						case "sdk":
 							currentPackage.sdk = value
 						}
@@ -117,7 +125,7 @@ func (parser *Parser) ParseDependencies(filePath string, includePeerDependencies
 
 	// Finalize any pending package
 	if currentPackage != nil {
-		if dependency := currentPackage.toDependency(currentSection); dependency != nil {
+		if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
 			dependencies = append(dependencies, *dependency)
 		}
 	}
@@ -130,13 +138,14 @@ type packageInfo struct {
 	name              string
 	version           string
 	hostedURL         string
+	inHostedBlock     bool
 	sdk               string
 	lineNumber        int
 	versionLineNumber int
 }
 
 // toDependency converts packageInfo to shared.Dependency if it should be included
-func (pkg *packageInfo) toDependency(section shared.DependencyType) *shared.Dependency {
+func (pkg *packageInfo) toDependency(section shared.DependencyType, filePath string) *shared.Dependency {
 	// Skip SDK dependencies
 	if pkg.sdk != "" {
 		return nil
@@ -153,11 +162,14 @@ func (pkg *packageInfo) toDependency(section shared.DependencyType) *shared.Depe
 	}
 
 	dependency := &shared.Dependency{
-		Name:            pkg.name,
-		Version:         shared.CleanVersion(pkg.version),
-		OriginalVersion: pkg.version,
-		Type:            section,
-		LineNumber:      lineNum,
+		BaseDependency: shared.BaseDependency{
+			Name:            pkg.name,
+			OriginalVersion: pkg.version,
+			Type:            section,
+			FilePath:        filePath,
+			LineNumber:      lineNum,
+		},
+		Version: shared.CleanVersion(pkg.version),
 	}
 
 	// Set hosted URL for non-pub.dev hosted packages
@@ -176,6 +188,22 @@ func cleanQuotes(s string) string {
 		return s[1 : len(s)-1]
 	}
 	return s
+}
+
+func getIndentation(line string) int {
+	indent := 0
+	for _, character := range line {
+		if character == ' ' {
+			indent++
+			continue
+		}
+		if character == '\t' {
+			indent += 2
+			continue
+		}
+		break
+	}
+	return indent
 }
 
 // shouldIncludeDependency checks if a dependency should be included
@@ -198,9 +226,9 @@ func shouldIncludeDependency(name, version string) bool {
 	return true
 }
 
-// GetFileType returns the file type this parser handles
-func (parser *Parser) GetFileType() string {
-	return "pub"
+// GetRegistryType returns the registry type this parser handles
+func (parser *Parser) GetRegistryType() shared.RegistryType {
+	return shared.Pub
 }
 
 // Ensure Parser implements the interface
