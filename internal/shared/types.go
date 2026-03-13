@@ -141,10 +141,17 @@ type Parser interface {
 	GetRegistryType() RegistryType
 }
 
+// PatternProvider defines how to generate regex patterns for different file formats
+type PatternProvider interface {
+	GetPattern(dependency OutdatedDependency) string
+	GetReplacement(dependency OutdatedDependency, newVersion string) string
+}
+
 // Updater interface defines the contract for updating dependencies in files
 type Updater interface {
-	UpdateDependencies(filePath string, outdated []OutdatedDependency, options Options) error
+	GetPatternProvider() PatternProvider
 	GetRegistryType() RegistryType
+	ValidateOptions(options Options) error
 }
 
 // RegistryClient interface defines the contract for fetching package information

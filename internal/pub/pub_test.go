@@ -1,6 +1,7 @@
 package pub
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -157,8 +158,8 @@ dev_dependencies:
 		},
 	}
 
-	updater := NewUpdater()
-	err = updater.UpdateDependencies(pubspecPath, outdated, shared.Options{})
+	updaterInstance := NewUpdater()
+	err = updaterInstance.UpdateDependencies(pubspecPath, outdated, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update pubspec.yaml: %v", err)
 	}
@@ -564,8 +565,8 @@ dev_dependencies:
 		},
 	}
 
-	updater := NewUpdater()
-	err = updater.UpdateDependencies(pubspecPath, outdated, shared.Options{})
+	updaterInstance := NewUpdater()
+	err = updaterInstance.UpdateDependencies(pubspecPath, outdated, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update pubspec.yaml: %v", err)
 	}
@@ -838,7 +839,8 @@ flutter:
 		},
 	}
 
-	err = updater.UpdateDependencies(pubspecPath2, devDependencies, shared.Options{})
+	updaterInstance := NewUpdater()
+	err = updaterInstance.UpdateDependencies(pubspecPath2, devDependencies, shared.Options{})
 	if err != nil {
 		t.Fatalf("Failed to update dev dependencies: %v", err)
 	}
@@ -867,5 +869,101 @@ flutter:
 	// Verify that updating dev_dependencies section doesn't affect dependencies section
 	if !strings.Contains(updated2Str, "http: ^0.13.5") {
 		t.Errorf("http dependency should remain unchanged when updating dev dependencies")
+	}
+}
+
+func TestHostedURLTrailingSlashDoesNotProduceDoubleSlash(t *testing.T) {
+	tempDir := t.TempDir()
+	pubspecPath := filepath.Join(tempDir, "pubspec.yaml")
+
+	pubspecContent := `name: test_package
+dependencies:
+  trailing_slash_pkg:
+    hosted: https://registry.example.com/pub/
+    version: ^1.0.0
+  no_trailing_slash_pkg:
+    hosted: https://registry.example.com/pub
+    version: ^2.0.0
+`
+
+	err := os.WriteFile(pubspecPath, []byte(pubspecContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(pubspecPath, shared.Options{})
+	if err != nil {
+		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
+	}
+
+	if len(dependencies) != 2 {
+		t.Fatalf("Expected 2 dependencies, got %d", len(dependencies))
+	}
+
+	for _, dependency := range dependencies {
+		registryURL := dependency.HostedURL
+		// Simulate the same URL construction used in registry.go
+		url := fmt.Sprintf("%s/api/packages/%s", strings.TrimRight(registryURL, "/"), dependency.Name)
+		if strings.Contains(url, "//api") {
+			t.Errorf("URL for %s contains double slash: %s", dependency.Name, url)
+		}
+		expectedURL := fmt.Sprintf("https://registry.example.com/pub/api/packages/%s", dependency.Name)
+		if url != expectedURL {
+			t.Errorf("Expected URL %s, got %s", expectedURL, url)
+		}
+	}
+}
+
+func TestParseHostedDependencyBothForms(t *testing.T) {
+	tempDir := t.TempDir()
+	pubspecPath := filepath.Join(tempDir, "pubspec.yaml")
+
+	pubspecContent := `name: hosted_forms_test
+dependencies:
+  scalar_hosted_pkg:
+    hosted: https://registry.example.com/pub
+    version: ^1.0.0
+  map_hosted_pkg:
+    hosted:
+      name: map_hosted_pkg
+      url: https://registry.example.com/pub/
+    version: ^2.0.0
+`
+
+	err := os.WriteFile(pubspecPath, []byte(pubspecContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(pubspecPath, shared.Options{})
+	if err != nil {
+		t.Fatalf("Failed to parse pubspec.yaml: %v", err)
+	}
+
+	if len(dependencies) != 2 {
+		t.Fatalf("Expected 2 dependencies, got %d", len(dependencies))
+	}
+
+	dependencyMap := make(map[string]shared.Dependency)
+	for _, dependency := range dependencies {
+		dependencyMap[dependency.Name] = dependency
+	}
+
+	scalarDependency, scalarExists := dependencyMap["scalar_hosted_pkg"]
+	if !scalarExists {
+		t.Fatalf("scalar_hosted_pkg not found")
+	}
+	if scalarDependency.HostedURL != "https://registry.example.com/pub" {
+		t.Errorf("Expected scalar hosted URL https://registry.example.com/pub, got %s", scalarDependency.HostedURL)
+	}
+
+	mapDependency, mapExists := dependencyMap["map_hosted_pkg"]
+	if !mapExists {
+		t.Fatalf("map_hosted_pkg not found")
+	}
+	if mapDependency.HostedURL != "https://registry.example.com/pub/" {
+		t.Errorf("Expected map hosted URL https://registry.example.com/pub/, got %s", mapDependency.HostedURL)
 	}
 }

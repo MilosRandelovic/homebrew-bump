@@ -9,10 +9,14 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
+var (
+	versionPrefixRegex        = regexp.MustCompile(`^[\^~>=<]+`)
+	versionPrefixCaptureRegex = regexp.MustCompile(`^([\^~>=<]+)`)
+)
+
 // CleanVersion removes prefix characters (^, ~, >=, etc.) from version strings
 func CleanVersion(version string) string {
-	prefixRegex := regexp.MustCompile(`^[\^~>=<]+`)
-	return prefixRegex.ReplaceAllString(version, "")
+	return versionPrefixRegex.ReplaceAllString(version, "")
 }
 
 // HasSemanticPrefix checks if version has semantic versioning prefix
@@ -67,8 +71,7 @@ func HasSemanticPrefix(version string) bool {
 
 // GetVersionPrefix returns the prefix of a version string (^, ~, >=, etc.)
 func GetVersionPrefix(version string) string {
-	prefixRegex := regexp.MustCompile(`^([\^~>=<]+)`)
-	matches := prefixRegex.FindStringSubmatch(version)
+	matches := versionPrefixCaptureRegex.FindStringSubmatch(version)
 	if len(matches) > 1 {
 		return matches[1]
 	}

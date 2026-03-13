@@ -25,6 +25,7 @@ func TestCacheBasicOps(t *testing.T) {
 	entry := CacheEntry{
 		PackageName:      "test-package",
 		Type:             "npm",
+		Registry:         "https://registry.npmjs.org",
 		CurrentVersion:   "1.0.0",
 		Constraint:       "^1.0.0",
 		AbsoluteLatest:   "2.0.0",
@@ -33,7 +34,7 @@ func TestCacheBasicOps(t *testing.T) {
 	}
 	cache.Set(entry)
 
-	key := generateCacheKey(entry.PackageName, entry.Type, entry.CurrentVersion, entry.Constraint)
+	key := generateCacheKey(entry.PackageName, entry.Type, entry.Registry, entry.CurrentVersion, entry.Constraint)
 	got, ok := cache.Get(key)
 	if !ok {
 		t.Fatalf("expected cache hit")
@@ -69,6 +70,7 @@ func TestCacheRegistryDifferentiation(t *testing.T) {
 	entryNpm := CacheEntry{
 		PackageName:      "foo",
 		Type:             "npm",
+		Registry:         "https://registry.npmjs.org",
 		CurrentVersion:   "1.0.0",
 		Constraint:       "*",
 		AbsoluteLatest:   "2.0.0",
@@ -78,6 +80,7 @@ func TestCacheRegistryDifferentiation(t *testing.T) {
 	entryPub := CacheEntry{
 		PackageName:      "foo",
 		Type:             "pub",
+		Registry:         "https://pub.dev",
 		CurrentVersion:   "1.0.0",
 		Constraint:       "*",
 		AbsoluteLatest:   "3.0.0",
@@ -87,14 +90,60 @@ func TestCacheRegistryDifferentiation(t *testing.T) {
 	cache.Set(entryNpm)
 	cache.Set(entryPub)
 
-	keyNpm := generateCacheKey(entryNpm.PackageName, entryNpm.Type, entryNpm.CurrentVersion, entryNpm.Constraint)
-	keyPub := generateCacheKey(entryPub.PackageName, entryPub.Type, entryPub.CurrentVersion, entryPub.Constraint)
+	keyNpm := generateCacheKey(entryNpm.PackageName, entryNpm.Type, entryNpm.Registry, entryNpm.CurrentVersion, entryNpm.Constraint)
+	keyPub := generateCacheKey(entryPub.PackageName, entryPub.Type, entryPub.Registry, entryPub.CurrentVersion, entryPub.Constraint)
 
 	if got, ok := cache.Get(keyNpm); !ok || got.AbsoluteLatest != "2.0.0" {
 		t.Errorf("expected npm cache hit")
 	}
 	if got, ok := cache.Get(keyPub); !ok || got.AbsoluteLatest != "3.0.0" {
 		t.Errorf("expected pub cache hit")
+	}
+
+	os.Remove(cachePath)
+}
+
+func TestCacheDifferentiatesSamePackageAcrossRegistries(t *testing.T) {
+	cachePath := getTestCachePath()
+	os.Remove(cachePath)
+	cache := &Cache{
+		entries:  make(map[string]CacheEntry),
+		filePath: cachePath,
+		mu:       sync.Mutex{},
+	}
+
+	publicEntry := CacheEntry{
+		PackageName:      "@company/core",
+		Type:             "npm",
+		Registry:         "https://registry.npmjs.org",
+		CurrentVersion:   "",
+		Constraint:       "^1.0.0",
+		AbsoluteLatest:   "2.0.0",
+		ConstraintLatest: "1.9.0",
+		Expiry:           time.Now().Add(10 * time.Minute),
+	}
+	privateEntry := CacheEntry{
+		PackageName:      "@company/core",
+		Type:             "npm",
+		Registry:         "https://packages.company.com/npm",
+		CurrentVersion:   "",
+		Constraint:       "^1.0.0",
+		AbsoluteLatest:   "1.7.0",
+		ConstraintLatest: "1.7.0",
+		Expiry:           time.Now().Add(10 * time.Minute),
+	}
+
+	cache.Set(publicEntry)
+	cache.Set(privateEntry)
+
+	publicKey := generateCacheKey(publicEntry.PackageName, publicEntry.Type, publicEntry.Registry, publicEntry.CurrentVersion, publicEntry.Constraint)
+	privateKey := generateCacheKey(privateEntry.PackageName, privateEntry.Type, privateEntry.Registry, privateEntry.CurrentVersion, privateEntry.Constraint)
+
+	if got, ok := cache.Get(publicKey); !ok || got.AbsoluteLatest != "2.0.0" {
+		t.Errorf("expected public registry cache entry, got %#v (ok=%v)", got, ok)
+	}
+	if got, ok := cache.Get(privateKey); !ok || got.AbsoluteLatest != "1.7.0" {
+		t.Errorf("expected private registry cache entry, got %#v (ok=%v)", got, ok)
 	}
 
 	os.Remove(cachePath)
@@ -112,6 +161,7 @@ func TestCacheExpiry(t *testing.T) {
 	entry := CacheEntry{
 		PackageName:      "foo",
 		Type:             "npm",
+		Registry:         "https://registry.npmjs.org",
 		CurrentVersion:   "1.0.0",
 		Constraint:       "*",
 		AbsoluteLatest:   "2.0.0",
@@ -120,7 +170,7 @@ func TestCacheExpiry(t *testing.T) {
 	}
 	cache.Set(entry)
 
-	key := generateCacheKey(entry.PackageName, entry.Type, entry.CurrentVersion, entry.Constraint)
+	key := generateCacheKey(entry.PackageName, entry.Type, entry.Registry, entry.CurrentVersion, entry.Constraint)
 	if _, ok := cache.Get(key); ok {
 		t.Errorf("expected cache miss due to expiry")
 	}
@@ -140,6 +190,7 @@ func TestCacheClear(t *testing.T) {
 	entry := CacheEntry{
 		PackageName:      "foo",
 		Type:             "npm",
+		Registry:         "https://registry.npmjs.org",
 		CurrentVersion:   "1.0.0",
 		Constraint:       "*",
 		AbsoluteLatest:   "2.0.0",
@@ -175,6 +226,7 @@ func TestCacheExpiredCleanup(t *testing.T) {
 	expiredEntry := CacheEntry{
 		PackageName:      "expired-pkg",
 		Type:             "npm",
+		Registry:         "https://registry.npmjs.org",
 		CurrentVersion:   "1.0.0",
 		Constraint:       "*",
 		AbsoluteLatest:   "2.0.0",
@@ -184,6 +236,7 @@ func TestCacheExpiredCleanup(t *testing.T) {
 	validEntry := CacheEntry{
 		PackageName:      "valid-pkg",
 		Type:             "npm",
+		Registry:         "https://registry.npmjs.org",
 		CurrentVersion:   "1.0.0",
 		Constraint:       "*",
 		AbsoluteLatest:   "3.0.0",
@@ -208,13 +261,13 @@ func TestCacheExpiredCleanup(t *testing.T) {
 	}
 
 	// Valid entry should still be accessible
-	validKey := generateCacheKey("valid-pkg", "npm", "1.0.0", "*")
+	validKey := generateCacheKey("valid-pkg", "npm", "https://registry.npmjs.org", "1.0.0", "*")
 	if _, ok := cache.Get(validKey); !ok {
 		t.Errorf("expected valid entry to still be accessible")
 	}
 
 	// Expired entry should not be accessible
-	expiredKey := generateCacheKey("expired-pkg", "npm", "1.0.0", "*")
+	expiredKey := generateCacheKey("expired-pkg", "npm", "https://registry.npmjs.org", "1.0.0", "*")
 	if _, ok := cache.Get(expiredKey); ok {
 		t.Errorf("expected expired entry to not be accessible")
 	}

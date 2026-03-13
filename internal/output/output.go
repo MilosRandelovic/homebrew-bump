@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
@@ -29,33 +30,6 @@ func GetChangeColor(change shared.SemverChange) string {
 		return ColorGreen
 	default:
 		return ColorReset
-	}
-}
-
-// sortFilesByDepth sorts files by path depth (shortest first = root), then alphabetically
-func sortFilesByDepth(files []string) {
-	for i := 0; i < len(files)-1; i++ {
-		for j := i + 1; j < len(files); j++ {
-			depthI := strings.Count(files[i], string(filepath.Separator))
-			depthJ := strings.Count(files[j], string(filepath.Separator))
-
-			if depthI > depthJ {
-				files[i], files[j] = files[j], files[i]
-			} else if depthI == depthJ && files[i] > files[j] {
-				files[i], files[j] = files[j], files[i]
-			}
-		}
-	}
-}
-
-// sortStringsAlphabetically sorts a string slice alphabetically using bubble sort
-func sortStringsAlphabetically(items []string) {
-	for i := 0; i < len(items)-1; i++ {
-		for j := i + 1; j < len(items); j++ {
-			if items[i] > items[j] {
-				items[i], items[j] = items[j], items[i]
-			}
-		}
 	}
 }
 
@@ -106,7 +80,7 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 		grouped[dependency.FilePath][dependency.Type] = append(grouped[dependency.FilePath][dependency.Type], dependency)
 	}
 
-	sortFilesByDepth(files)
+	shared.SortFilesByDepth(files)
 	showFilenames := len(files) > 1
 
 	for _, file := range files {
@@ -131,13 +105,9 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 
 func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 	// Sort alphabetically by name
-	for i := 0; i < len(outdated)-1; i++ {
-		for j := i + 1; j < len(outdated); j++ {
-			if outdated[i].Name > outdated[j].Name {
-				outdated[i], outdated[j] = outdated[j], outdated[i]
-			}
-		}
-	}
+	slices.SortFunc(outdated, func(a, b shared.OutdatedDependency) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 
 	// Calculate maximum widths for proper alignment
 	maxNameWidth := 0
@@ -166,11 +136,8 @@ func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 
 		// Use the original version from the dependency struct
 		currentVersion := dependency.OriginalVersion
-		// Replace only the version number, preserving any prefix
-		latestVersion := currentVersion
-		if dependency.CurrentVersion != "" {
-			latestVersion = currentVersion[:len(currentVersion)-len(dependency.CurrentVersion)] + dependency.LatestVersion
-		}
+		prefix := shared.GetVersionPrefix(currentVersion)
+		latestVersion := prefix + dependency.LatestVersion
 
 		// Apply color to output for better visibility
 		fmt.Printf("%s%s%-*s%s  %*s  →  %s%s%s\n",
@@ -202,7 +169,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Opt
 			grouped[skip.FilePath][skip.Type][skip.Name] = skip
 		}
 
-		sortFilesByDepth(files)
+		shared.SortFilesByDepth(files)
 		showFilenames := len(files) > 1
 
 		fmt.Printf("\nPackages skipped due to semver constraints:\n")
@@ -229,7 +196,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Opt
 				for name := range skippedByType {
 					names = append(names, name)
 				}
-				sortStringsAlphabetically(names)
+				slices.Sort(names)
 
 				indent := "    "
 				if !showFilenames {
@@ -258,13 +225,9 @@ func PrintErrors(errors []shared.DependencyError, options shared.Options) {
 	}
 
 	// Sort alphabetically by name
-	for i := 0; i < len(errors)-1; i++ {
-		for j := i + 1; j < len(errors); j++ {
-			if errors[i].Name > errors[j].Name {
-				errors[i], errors[j] = errors[j], errors[i]
-			}
-		}
-	}
+	slices.SortFunc(errors, func(a, b shared.DependencyError) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 
 	if options.Verbose {
 		fmt.Printf("\nErrors encountered:\n")

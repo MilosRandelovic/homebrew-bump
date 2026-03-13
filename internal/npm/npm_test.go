@@ -1053,6 +1053,9 @@ func TestMonorepoWorkspaceDetection(t *testing.T) {
 
 func TestMonorepoWithoutWorkspaces(t *testing.T) {
 	// Create a package.json without workspaces field
+	tempDir := t.TempDir()
+	packageJsonPath := filepath.Join(tempDir, "package.json")
+
 	packageJSON := `{
   "name": "regular-project",
   "dependencies": {
@@ -1060,20 +1063,13 @@ func TestMonorepoWithoutWorkspaces(t *testing.T) {
   }
 }`
 
-	tempFile, err := os.CreateTemp("", "package*.json")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
+	if err := os.WriteFile(packageJsonPath, []byte(packageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
-
-	if _, err := tempFile.Write([]byte(packageJSON)); err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
-	tempFile.Close()
 
 	// Parse with monorepo flag enabled but no workspaces field
 	parser := NewParser()
-	dependencies, err := parser.ParseDependencies(tempFile.Name(), shared.Options{Monorepo: true})
+	dependencies, err := parser.ParseDependencies(packageJsonPath, shared.Options{Monorepo: true})
 	if err != nil {
 		t.Fatalf("Failed to parse package.json: %v", err)
 	}
@@ -1087,8 +1083,8 @@ func TestMonorepoWithoutWorkspaces(t *testing.T) {
 		t.Errorf("Expected lodash, got %s", dependencies[0].Name)
 	}
 
-	if dependencies[0].FilePath != tempFile.Name() {
-		t.Errorf("FilePath = %s, want %s", dependencies[0].FilePath, tempFile.Name())
+	if dependencies[0].FilePath != packageJsonPath {
+		t.Errorf("FilePath = %s, want %s", dependencies[0].FilePath, packageJsonPath)
 	}
 }
 
@@ -1254,5 +1250,123 @@ func TestWorkspaceDependenciesSkipped(t *testing.T) {
 	}
 	if !foundAxios {
 		t.Error("External dependency axios should be parsed")
+	}
+}
+
+func TestMonorepoWorkspaceObjectForm(t *testing.T) {
+	rootDir := t.TempDir()
+	packagesDir := filepath.Join(rootDir, "packages")
+	packageADir := filepath.Join(packagesDir, "package-a")
+
+	if err := os.MkdirAll(packageADir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
+	}
+
+	rootPackageJSON := `{
+  "name": "monorepo-root",
+  "private": true,
+  "workspaces": {
+    "packages": ["packages/*"]
+  },
+  "dependencies": {
+    "typescript": "^5.0.0"
+  }
+}`
+	rootPath := filepath.Join(rootDir, "package.json")
+	if err := os.WriteFile(rootPath, []byte(rootPackageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create root package.json: %v", err)
+	}
+
+	workspacePackageJSON := `{
+  "name": "package-a",
+  "dependencies": {
+    "react": "^18.0.0"
+  }
+}`
+	workspacePath := filepath.Join(packageADir, "package.json")
+	if err := os.WriteFile(workspacePath, []byte(workspacePackageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create workspace package.json: %v", err)
+	}
+
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(rootPath, shared.Options{Monorepo: true})
+	if err != nil {
+		t.Fatalf("Failed to parse monorepo with object workspace form: %v", err)
+	}
+
+	if len(dependencies) != 2 {
+		t.Fatalf("Expected 2 dependencies, got %d", len(dependencies))
+	}
+
+	paths := make(map[string]string)
+	for _, dependency := range dependencies {
+		paths[dependency.Name] = dependency.FilePath
+	}
+
+	if paths["typescript"] != rootPath {
+		t.Errorf("typescript FilePath = %s, want %s", paths["typescript"], rootPath)
+	}
+	if paths["react"] != workspacePath {
+		t.Errorf("react FilePath = %s, want %s", paths["react"], workspacePath)
+	}
+}
+
+func TestMonorepoBestEffortOnInvalidWorkspacePackage(t *testing.T) {
+	rootDir := t.TempDir()
+	packagesDir := filepath.Join(rootDir, "packages")
+	goodPackageDir := filepath.Join(packagesDir, "good")
+	badPackageDir := filepath.Join(packagesDir, "bad")
+
+	if err := os.MkdirAll(goodPackageDir, 0755); err != nil {
+		t.Fatalf("Failed to create good workspace directory: %v", err)
+	}
+	if err := os.MkdirAll(badPackageDir, 0755); err != nil {
+		t.Fatalf("Failed to create bad workspace directory: %v", err)
+	}
+
+	rootPackageJSON := `{
+  "name": "monorepo-root",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "typescript": "^5.0.0"
+  }
+}`
+	rootPath := filepath.Join(rootDir, "package.json")
+	if err := os.WriteFile(rootPath, []byte(rootPackageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create root package.json: %v", err)
+	}
+
+	goodPackageJSON := `{
+  "name": "good",
+  "dependencies": {
+    "react": "^18.0.0"
+  }
+}`
+	if err := os.WriteFile(filepath.Join(goodPackageDir, "package.json"), []byte(goodPackageJSON), 0644); err != nil {
+		t.Fatalf("Failed to create good workspace package.json: %v", err)
+	}
+
+	// Invalid JSON in one workspace package should not abort whole parse in best-effort mode.
+	if err := os.WriteFile(filepath.Join(badPackageDir, "package.json"), []byte(`{"dependencies": {"broken": }}`), 0644); err != nil {
+		t.Fatalf("Failed to create bad workspace package.json: %v", err)
+	}
+
+	parser := NewParser()
+	dependencies, err := parser.ParseDependencies(rootPath, shared.Options{Monorepo: true, Verbose: true})
+	if err != nil {
+		t.Fatalf("Expected best-effort parsing, got error: %v", err)
+	}
+
+	names := make(map[string]bool)
+	for _, dependency := range dependencies {
+		names[dependency.Name] = true
+	}
+
+	if !names["typescript"] {
+		t.Error("Expected root dependency typescript to be present")
+	}
+	if !names["react"] {
+		t.Error("Expected valid workspace dependency react to be present")
 	}
 }

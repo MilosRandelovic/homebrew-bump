@@ -13,6 +13,7 @@ import (
 type CacheEntry struct {
 	PackageName      string
 	Type             string
+	Registry         string
 	CurrentVersion   string
 	Constraint       string
 	AbsoluteLatest   string
@@ -45,13 +46,13 @@ func NewCache() *Cache {
 	return cache
 }
 
-func generateCacheKey(packageName, packageType, current, constraint string) string {
-	return fmt.Sprintf("%s|%s|%s|%s", packageName, packageType, current, constraint)
+func generateCacheKey(packageName, packageType, registry, current, constraint string) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s", packageName, packageType, registry, current, constraint)
 }
 
 // GenerateCacheKey is the exported version of generateCacheKey
-func GenerateCacheKey(packageName, packageType, current, constraint string) string {
-	return generateCacheKey(packageName, packageType, current, constraint)
+func GenerateCacheKey(packageName, packageType, registry, current, constraint string) string {
+	return generateCacheKey(packageName, packageType, registry, current, constraint)
 }
 
 func (c *Cache) LoadEntries() error {
@@ -78,26 +79,42 @@ func (c *Cache) LoadEntries() error {
 		}
 
 		parts := strings.Split(line, "|")
-		if len(parts) != 7 {
+		if len(parts) != 7 && len(parts) != 8 {
 			continue // skip malformed lines
 		}
 
-		expiry, err := time.Parse(time.RFC3339, parts[6])
+		expiryIndex := len(parts) - 1
+		expiry, err := time.Parse(time.RFC3339, parts[expiryIndex])
 		if err != nil {
 			continue // skip entries with invalid expiry
+		}
+
+		registry := ""
+		currentVersionIndex := 2
+		constraintIndex := 3
+		absoluteLatestIndex := 4
+		constraintLatestIndex := 5
+
+		if len(parts) == 8 {
+			registry = parts[2]
+			currentVersionIndex = 3
+			constraintIndex = 4
+			absoluteLatestIndex = 5
+			constraintLatestIndex = 6
 		}
 
 		entry := CacheEntry{
 			PackageName:      parts[0],
 			Type:             parts[1],
-			CurrentVersion:   parts[2],
-			Constraint:       parts[3],
-			AbsoluteLatest:   parts[4],
-			ConstraintLatest: parts[5],
+			Registry:         registry,
+			CurrentVersion:   parts[currentVersionIndex],
+			Constraint:       parts[constraintIndex],
+			AbsoluteLatest:   parts[absoluteLatestIndex],
+			ConstraintLatest: parts[constraintLatestIndex],
 			Expiry:           expiry,
 		}
 
-		key := generateCacheKey(entry.PackageName, entry.Type, entry.CurrentVersion, entry.Constraint)
+		key := generateCacheKey(entry.PackageName, entry.Type, entry.Registry, entry.CurrentVersion, entry.Constraint)
 		entries[key] = entry
 	}
 
@@ -120,6 +137,7 @@ func (c *Cache) SaveEntries() error {
 		line := strings.Join([]string{
 			entry.PackageName,
 			entry.Type,
+			entry.Registry,
 			entry.CurrentVersion,
 			entry.Constraint,
 			entry.AbsoluteLatest,
@@ -152,7 +170,7 @@ func (c *Cache) Get(key string) (CacheEntry, bool) {
 func (c *Cache) Set(entry CacheEntry) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := generateCacheKey(entry.PackageName, entry.Type, entry.CurrentVersion, entry.Constraint)
+	key := generateCacheKey(entry.PackageName, entry.Type, entry.Registry, entry.CurrentVersion, entry.Constraint)
 	c.entries[key] = entry
 }
 

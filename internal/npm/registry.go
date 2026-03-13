@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/MilosRandelovic/homebrew-bump/internal/output"
@@ -33,16 +34,21 @@ func NewRegistryClient() *RegistryClient {
 
 // GetLatestVersionFromRegistry fetches the latest version from a specific registry
 func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registryURL string, options shared.Options, cache *shared.Cache) (string, error) {
+	targetRegistryURL, npmrcConfig, err := client.resolveRegistryURL(packageName, registryURL)
+	if err != nil {
+		return "", err
+	}
+
 	// Check cache first if enabled
 	if cache != nil {
-		key := shared.GenerateCacheKey(packageName, "npm", "", "*")
+		key := shared.GenerateCacheKey(packageName, "npm", targetRegistryURL, "", "*")
 		if entry, ok := cache.Get(key); ok {
 			output.VerbosePrintf(options, "Cache hit: %s\n", packageName)
 			return entry.AbsoluteLatest, nil
 		}
 	}
 
-	body, err := client.fetchPackageInfo(packageName, registryURL, options.Verbose)
+	body, err := client.fetchPackageInfo(packageName, targetRegistryURL, npmrcConfig, options)
 	if err != nil {
 		return "", err
 	}
@@ -58,6 +64,7 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 			entry := shared.CacheEntry{
 				PackageName:      packageName,
 				Type:             "npm",
+				Registry:         targetRegistryURL,
 				CurrentVersion:   "",
 				Constraint:       "*",
 				AbsoluteLatest:   latest,
@@ -74,16 +81,21 @@ func (client *RegistryClient) GetLatestVersionFromRegistry(packageName, registry
 
 // GetBothLatestVersions fetches both the absolute latest version and the latest version satisfying a constraint
 func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, registryURL string, options shared.Options, cache *shared.Cache) (string, string, error) {
+	targetRegistryURL, npmrcConfig, err := client.resolveRegistryURL(packageName, registryURL)
+	if err != nil {
+		return "", "", err
+	}
+
 	// Check cache first if enabled
 	if cache != nil {
-		key := shared.GenerateCacheKey(packageName, "npm", "", constraint)
+		key := shared.GenerateCacheKey(packageName, "npm", targetRegistryURL, "", constraint)
 		if entry, ok := cache.Get(key); ok {
 			output.VerbosePrintf(options, "Cache hit: %s\n", packageName)
 			return entry.AbsoluteLatest, entry.ConstraintLatest, nil
 		}
 	}
 
-	body, err := client.fetchPackageInfo(packageName, registryURL, options.Verbose)
+	body, err := client.fetchPackageInfo(packageName, targetRegistryURL, npmrcConfig, options)
 	if err != nil {
 		return "", "", err
 	}
@@ -112,6 +124,7 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 		entry := shared.CacheEntry{
 			PackageName:      packageName,
 			Type:             "npm",
+			Registry:         targetRegistryURL,
 			CurrentVersion:   "",
 			Constraint:       constraint,
 			AbsoluteLatest:   absoluteLatest,
@@ -124,30 +137,30 @@ func (client *RegistryClient) GetBothLatestVersions(packageName, constraint, reg
 	return absoluteLatest, constraintLatest, nil
 }
 
-// fetchPackageInfo is a shared method to fetch package information from registries
-func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, verbose bool) ([]byte, error) {
-	// Parse .npmrc configuration from both local and global files
+func (client *RegistryClient) resolveRegistryURL(packageName, registryURL string) (string, *NpmConfig, error) {
 	currentWorkingDir, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current directory: %w", err)
+		return "", nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	npmrcPath := filepath.Join(currentWorkingDir, ".npmrc")
 	npmrcConfig, err := parseNpmrcFiles(npmrcPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse .npmrc: %w", err)
+		return "", nil, fmt.Errorf("failed to parse .npmrc: %w", err)
 	}
 
-	var targetRegistryURL string
 	if registryURL != "" {
-		targetRegistryURL = registryURL
-	} else {
-		targetRegistryURL = getRegistryForPackage(packageName, npmrcConfig)
+		return registryURL, npmrcConfig, nil
 	}
 
-	url := fmt.Sprintf("%s/%s", targetRegistryURL, packageName)
+	return getRegistryForPackage(packageName, npmrcConfig), npmrcConfig, nil
+}
 
-	if verbose {
+// fetchPackageInfo is a shared method to fetch package information from registries
+func (client *RegistryClient) fetchPackageInfo(packageName, targetRegistryURL string, npmrcConfig *NpmConfig, options shared.Options) ([]byte, error) {
+	url := fmt.Sprintf("%s/%s", strings.TrimRight(targetRegistryURL, "/"), packageName)
+
+	if options.Verbose {
 		fmt.Printf("Checking npm package: %s (registry: %s)\n", packageName, targetRegistryURL)
 	}
 
@@ -160,7 +173,7 @@ func (client *RegistryClient) fetchPackageInfo(packageName, registryURL string, 
 	// Add authentication if available for this registry
 	if authToken := getAuthTokenForRegistry(targetRegistryURL, npmrcConfig); authToken != "" {
 		request.Header.Set("Authorization", "Bearer "+authToken)
-		if verbose {
+		if options.Verbose {
 			fmt.Printf("Using authentication for registry: %s\n", targetRegistryURL)
 		}
 	}

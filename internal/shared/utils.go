@@ -1,6 +1,10 @@
 package shared
 
-import "strings"
+import (
+	"path/filepath"
+	"slices"
+	"strings"
+)
 
 // ExtractHostname extracts hostname from a URL for registry matching
 func ExtractHostname(url string) string {
@@ -19,4 +23,16 @@ func ExtractHostname(url string) string {
 	}
 
 	return strings.ToLower(url)
+}
+
+// SortFilesByDepth sorts file paths by path depth (shortest first = root), then alphabetically
+func SortFilesByDepth(files []string) {
+	slices.SortFunc(files, func(a, b string) int {
+		depthA := strings.Count(a, string(filepath.Separator))
+		depthB := strings.Count(b, string(filepath.Separator))
+		if depthA != depthB {
+			return depthA - depthB
+		}
+		return strings.Compare(a, b)
+	})
 }

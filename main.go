@@ -59,6 +59,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := validateOptionsForRegistry(options, registryType); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Parse the file
 	dependencies, err := parser.ParseDependencies(filePath, registryType, options)
 	if err != nil {
@@ -111,4 +116,16 @@ func main() {
 	} else {
 		output.PrintUpdatePrompt(len(result.Outdated) > 0, options.Semver)
 	}
+}
+
+func validateOptionsForRegistry(options shared.Options, registryType shared.RegistryType) error {
+	if registryType == shared.Pub && options.IncludePeerDependencies {
+		return fmt.Errorf("peer dependencies are not supported by pub")
+	}
+
+	if registryType == shared.Pub && options.Monorepo {
+		return fmt.Errorf("monorepo mode is only supported for npm projects")
+	}
+
+	return nil
 }

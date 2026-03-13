@@ -40,9 +40,9 @@ func TestParsePackageJson(t *testing.T) {
 	// Check specific dependencies - create maps for both clean and original versions
 	cleanVersionMap := make(map[string]string)
 	originalVersionMap := make(map[string]string)
-	for _, dep := range dependencies {
-		cleanVersionMap[dep.Name] = dep.Version
-		originalVersionMap[dep.Name] = dep.OriginalVersion
+	for _, dependency := range dependencies {
+		cleanVersionMap[dependency.Name] = dependency.Version
+		originalVersionMap[dependency.Name] = dependency.OriginalVersion
 	}
 
 	// Check clean versions (without prefixes)

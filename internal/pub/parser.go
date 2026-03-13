@@ -33,6 +33,7 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 
 	for lineNumber, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
+		indent := getIndentation(line)
 
 		// Check if we're entering a dependency section
 		if strings.HasPrefix(trimmedLine, "dependencies:") {
@@ -79,7 +80,7 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 				value := strings.TrimSpace(parts[1])
 
 				// Check if this is a top-level package name (2 spaces indentation)
-				if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
+				if indent == 2 {
 					// Finalize previous package if any
 					if currentPackage != nil {
 						if dependency := currentPackage.toDependency(currentSection, filePath); dependency != nil {
@@ -97,7 +98,7 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 						// Simple dependency (name: version)
 						currentPackage.version = cleanQuotes(value)
 					}
-				} else if strings.HasPrefix(line, "    ") {
+				} else if indent >= 4 {
 					// This is a sub-property of the current package (4+ spaces indentation)
 					if currentPackage != nil {
 						switch key {
@@ -105,7 +106,14 @@ func (parser *Parser) ParseDependencies(filePath string, options shared.Options)
 							currentPackage.version = cleanQuotes(value)
 							currentPackage.versionLineNumber = lineNumber + 1
 						case "hosted":
-							currentPackage.hostedURL = cleanQuotes(value)
+							currentPackage.inHostedBlock = value == ""
+							if value != "" {
+								currentPackage.hostedURL = cleanQuotes(value)
+							}
+						case "url":
+							if currentPackage.inHostedBlock && indent >= 6 {
+								currentPackage.hostedURL = cleanQuotes(value)
+							}
 						case "sdk":
 							currentPackage.sdk = value
 						}
@@ -130,6 +138,7 @@ type packageInfo struct {
 	name              string
 	version           string
 	hostedURL         string
+	inHostedBlock     bool
 	sdk               string
 	lineNumber        int
 	versionLineNumber int
@@ -179,6 +188,22 @@ func cleanQuotes(s string) string {
 		return s[1 : len(s)-1]
 	}
 	return s
+}
+
+func getIndentation(line string) int {
+	indent := 0
+	for _, character := range line {
+		if character == ' ' {
+			indent++
+			continue
+		}
+		if character == '\t' {
+			indent += 2
+			continue
+		}
+		break
+	}
+	return indent
 }
 
 // shouldIncludeDependency checks if a dependency should be included
