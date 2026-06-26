@@ -1,6 +1,7 @@
 # Build output
-homebrew-bump
 bump
+bump-core
+homebrew-bump
 
 # Test binary, built with `go test -c`
 *.test
