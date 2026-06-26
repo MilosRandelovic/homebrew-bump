@@ -2,60 +2,37 @@
 
 ## Project Context
 
-This is a Go CLI tool called "bump" that manages dependency updates for npm (package.json) and Dart/Flutter pub (pubspec.yaml) projects. It supports semver constraints, private registries, hosted packages, monorepo workspaces, and provides both checking and updating capabilities.
+This is a thin CLI wrapper around [bump-core](../bump-core) — a Go library that manages dependency updates for npm (package.json) and Dart/Flutter pub (pubspec.yaml) projects. All core logic (parsing, registry communication, version checking, file updating) lives in bump-core. This repo provides only the CLI interface: flag parsing, terminal output formatting, progress bars, and colored output.
 
 The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (referenced in the `Formula` folder), but should always be built as `bump`.
 
-### Monorepo Support
+## Architecture
 
-- npm monorepo support via `--monorepo` flag
-- Detects workspaces from root package.json `workspaces` field
-- Supports glob patterns for workspace detection (e.g., `packages/*`, `apps/*`)
-- Each dependency tracks its FilePath for proper file-by-file updates
-- Output groups dependencies by file when multiple files contain outdated packages
+- **bump-core** (`github.com/MilosRandelovic/bump-core`): All core logic — types, parsers, registry clients, updater, shared utilities. Referenced via `go.mod` replace directive pointing to `../bump-core`.
+- **homebrew-bump** (this repo): CLI entry point (`main.go`) and terminal output formatting (`internal/output/`). No business logic here.
 
-## Architecture Principles
+### Key Integration Points
 
-- Keep npm/ and pub/ packages separate - no cross-dependencies
-- Place common functionality in internal/shared/
-- Follow single responsibility principle per package
-- Use shared.Options struct for passing configuration flags instead of individual boolean parameters
+- `parser.AutoDetectDependencyFile(directory, logFunc)` — takes a directory path and a `shared.LogFunc` callback (or nil)
+- `parser.ParseDependencies(filePath, registryType, options)` — parses dependencies from a file
+- `updater.CheckOutdated(deps, registryType, options, workingDirectory, progressCallback, logFunc)` — checks for outdated deps
+- `updater.UpdateDependencies(filePath, outdated, registryType, options, workingDirectory, logFunc)` — updates dependency files
+- The CLI creates a `shared.LogFunc` that wraps `fmt.Printf` when verbose mode is enabled, or passes nil otherwise
 
 ## Code Patterns to Follow
 
 ### Options Pattern
 
-- ALL functions that accept configuration flags MUST use the shared.Options struct
+- ALL functions that accept configuration flags MUST use the `shared.Options` struct from bump-core
 - Do NOT pass individual boolean parameters (verbose, semver, monorepo, etc.)
-- Options struct contains: Verbose, Update, Semver, NoCache, IncludePeerDependencies, Monorepo
-- Example: `func ParseDependencies(filePath string, options shared.Options)` instead of `func ParseDependencies(filePath string, includePeerDependencies bool, monorepo bool)`
-- Access options with `options.Verbose`, `options.Semver`, etc.
-- In tests, initialize with `shared.Options{}` for defaults or `shared.Options{Verbose: true, Semver: true}` for specific flags
 
-### Error Handling
+### LogFunc Pattern
 
-- Categorize constraint mismatches as `semverSkipped`, not `errors`
-- When `GetBothLatestVersions` returns "no versions satisfy the constraint" error, add to semverSkipped with the absoluteLatest version
-- Wrap errors with context: `fmt.Errorf("context: %w", err)`
-- Distinguish between network errors, parse errors, and constraint mismatches
+- bump-core functions accept `log shared.LogFunc` callbacks for verbose output
+- The CLI creates one when `--verbose` is set: `func(format string, args ...any) { fmt.Printf(format, args...) }`
+- Pass nil when verbose is off — bump-core handles nil checks internally
 
-### Registry Client Implementation
-
-- Always implement the shared.RegistryClient interface
-- Pass registryURL parameter through the entire chain for hosted package support
-- Use GetBothLatestVersions to get both absolute latest and constraint-satisfying versions in one call
-- Support authentication for hosted packages via .npmrc and pub-tokens.json parsing
-
-### Testing Standards
-
-- Use t.TempDir() for temporary test files
-- Create MockRegistryClient implementing shared.RegistryClient interface
-- Include real-world test data (scoped packages, hosted packages, complex constraints)
-- Add regression tests for bug fixes
-- Test edge cases: invalid versions, network errors, authentication failures
-- Test monorepo scenarios: workspace detection, glob patterns, FilePath assignment, multiple package.json files
-
-### Output Formatting
+### Output Formatting (this repo's responsibility)
 
 - Sort ALL output lists (outdated, semverSkipped, errors) alphabetically by name within the print methods, not in main
 - Group dependencies by file first, then by type (dependencies, devDependencies, peerDependencies)
@@ -96,11 +73,18 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 ## File Structure Understanding
 
 ```text
+main.go               # CLI entry point: flag parsing, orchestration
 internal/
+└── output/           # Terminal output formatting, progress bars, help text, colored output
+```
+
+All core logic lives in bump-core:
+
+```text
+bump-core/
 ├── shared/           # Common types, version utilities, interfaces
 ├── parser/           # Auto-detection and delegation
 ├── updater/          # Core update checking logic
-├── output/           # Terminal output formatting, progress bars, help text
 ├── npm/              # npm ecosystem (package.json, .npmrc, npm registry)
 └── pub/              # Dart/Flutter pub ecosystem (pubspec.yaml, pub-tokens.json, pub registry)
 ```

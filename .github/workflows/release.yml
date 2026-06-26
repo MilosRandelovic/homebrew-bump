@@ -7,7 +7,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Prevent circular triggers when merging formula update PRs
+    # Skip the release produced by merging the automated formula-update PR.
     if: "!contains(github.event.head_commit.message, 'Update Homebrew formula for release')"
     permissions:
       contents: write
@@ -22,34 +22,39 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.25'
+        go-version: '1.26.1'
 
     - name: Install dependencies
       run: go mod download
 
-    - name: Extract version from main.go
+    - name: Build binary
+      run: go build -o bump
+
+    - name: Extract version
       id: version
       run: |
-        VERSION=$(grep 'const version = ' main.go | sed 's/const version = "\(.*\)"/\1/')
+        VERSION=$(./bump --version | awk '{print $NF}')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        echo "Detected version: $VERSION"
 
     - name: Configure git
       run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
     - name: Validate version
       run: |
-        # Check if git tag already exists
-        # (i.e. check if the version in main.go has not been bumped)
-        if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
-          echo "❌ Error: Git tag ${{ steps.version.outputs.tag }} already exists!"
-          echo "Please update the version in main.go before publishing."
-          exit 1
+        if git show-ref --verify --quiet "refs/tags/${{ steps.version.outputs.tag }}"; then
+          echo "Tag ${{ steps.version.outputs.tag }} already exists, skipping release."
+          echo "skip=true" >> $GITHUB_OUTPUT
+          exit 0
         fi
+        echo "skip=false" >> $GITHUB_OUTPUT
+      id: check_tag
 
     - name: Get previous tag for release notes
+      if: steps.check_tag.outputs.skip != 'true'
       id: previous_tag
       run: |
         git fetch --tags --prune-tags
@@ -57,27 +62,28 @@ jobs:
         echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
 
     - name: Create and push tag
+      if: steps.check_tag.outputs.skip != 'true'
       run: |
         git tag "${{ steps.version.outputs.tag }}"
         git push origin "${{ steps.version.outputs.tag }}"
 
     - name: Generate release notes
+      if: steps.check_tag.outputs.skip != 'true'
       id: release_notes
       run: |
         PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
-
         if [ -n "$PREVIOUS_TAG" ]; then
           NOTES=$(git log --no-merges --pretty=format:"- %s %h" ${PREVIOUS_TAG}..HEAD)
         else
           NOTES=$(git log --no-merges --pretty=format:"- %s %h" -50)
         fi
-
         echo "notes<<EOF" >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
         echo "$NOTES" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Create GitHub Release
+      if: steps.check_tag.outputs.skip != 'true'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.version.outputs.tag }}
@@ -87,12 +93,11 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Update Homebrew Formula
+      if: steps.check_tag.outputs.skip != 'true'
       run: |
-        # Calculate SHA256 of the GitHub release tarball
         RELEASE_URL="https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz"
-        SHA256=$(curl -sL "$RELEASE_URL" | sha256sum | cut -d' ' -f1)
+        SHA256=$(curl -sLf "$RELEASE_URL" | sha256sum | cut -d' ' -f1)
 
-        # Update the formula file
         sed -i "s|url \".*\"|url \"$RELEASE_URL\"|" Formula/bump.rb
         sed -i "s|sha256 \".*\"|sha256 \"$SHA256\"|" Formula/bump.rb
 
@@ -101,6 +106,7 @@ jobs:
         echo "- SHA256: $SHA256"
 
     - name: Create Pull Request for formula update
+      if: steps.check_tag.outputs.skip != 'true'
       uses: peter-evans/create-pull-request@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}

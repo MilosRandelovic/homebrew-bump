@@ -1,4 +1,14 @@
-# Change Log
+# Changelog
+
+Starting with v2.0.0, all core logic lives in [bump-core](https://github.com/MilosRandelovic/bump-core). See the [bump-core changelog](https://github.com/MilosRandelovic/bump-core/blob/main/CHANGELOG.md) for details on version checking, parsing, and update logic changes.
+
+This file tracks CLI-specific changes (flags, output formatting, terminal UI).
+
+## [2.0.0]
+
+- Extracted all core logic into [bump-core](https://github.com/MilosRandelovic/bump-core)
+- homebrew-bump is now a thin CLI wrapper that imports bump-core as a Go module
+- Version is sourced from bump-core (`shared.Version`)
 
 ## [1.3.0]
 

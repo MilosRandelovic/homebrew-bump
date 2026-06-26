@@ -1,0 +1,65 @@
+name: Update bump-core dependency
+
+# Triggered by bump-core's release workflow (repository_dispatch) whenever a new
+# bump-core version is tagged. Instead of committing the dependency bump straight
+# to main, this opens a reviewable pull request that runs through CI. Merging that
+# PR is a normal push to main, which then triggers the release workflow.
+
+on:
+  repository_dispatch:
+    types: [ bump-core-release ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  open-update-pr:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.26.1'
+
+    - name: Bump bump-core dependency
+      run: |
+        CORE_TAG="${{ github.event.client_payload.tag }}"
+        echo "Updating bump-core to ${CORE_TAG}"
+
+        # The local replace directive is only used for local development; drop it
+        # so the published module version is pinned on main.
+        if grep -q 'replace github.com/MilosRandelovic/bump-core =>' go.mod; then
+          sed -i '/^replace github.com\/MilosRandelovic\/bump-core/d' go.mod
+        fi
+        go get "github.com/MilosRandelovic/bump-core@${CORE_TAG}"
+        go mod tidy
+
+    - name: Verify build and tests
+      run: |
+        go build -o bump
+        go test ./...
+
+    - name: Create pull request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        # Use a PAT so the PR triggers the CI workflow. Falls back to the default
+        # token, in which case CI must be re-run manually (GitHub does not trigger
+        # workflows for PRs opened by GITHUB_TOKEN).
+        token: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
+        commit-message: "Update bump-core to ${{ github.event.client_payload.tag }}"
+        title: "Update bump-core to ${{ github.event.client_payload.tag }}"
+        body: |
+          Automated dependency update triggered by the release of
+          bump-core ${{ github.event.client_payload.tag }}.
+
+          - Bumps `github.com/MilosRandelovic/bump-core` to `${{ github.event.client_payload.tag }}`
+          - Removes the local `replace` directive and runs `go mod tidy`
+
+          Merging this PR to `main` triggers the release workflow, which tags the
+          release and opens the Homebrew formula update PR.
+        branch: dependency/bump-core-${{ github.event.client_payload.tag }}
+        delete-branch: true
+        labels: dependencies

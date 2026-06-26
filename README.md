@@ -1,6 +1,8 @@
 # Bump
 
-A Go utility that parses `package.json` and `pubspec.yaml` files to check and update dependencies.
+A CLI tool that checks and updates dependencies in `package.json` and `pubspec.yaml` files.
+
+This is a thin CLI wrapper around [bump-core](https://github.com/MilosRandelovic/bump-core), which contains all core logic (parsing, registry communication, version checking, file updating). This repo provides the command-line interface: flag parsing, terminal output formatting, progress bars, and colored output.
 
 ## Features
 
@@ -192,17 +194,25 @@ With workspace packages in `packages/package-a/package.json`, `packages/package-
 
 ## Architecture
 
-The project is organized into the following packages:
+This repo is a thin CLI wrapper. All core logic lives in [bump-core](https://github.com/MilosRandelovic/bump-core):
 
-- `main.go`: CLI interface and application entry point
-- `internal/output`: Output formatting, progress bars, and help text
-- `internal/parser`: Handles parsing and file detection for package.json and pubspec.yaml
-- `internal/updater`: Handles checking for updates and updating dependency files
-- `internal/shared`: Common types, utilities, and interfaces
-- `internal/npm`: npm-specific registry client, parser, and configuration
-- `internal/pub`: Dart/Flutter pub-specific registry client, parser, and configuration
+```txt
+homebrew-bump/          (this repo)
+├── main.go             # CLI entry point: flag parsing, orchestration
+└── internal/
+    └── output/         # Terminal output formatting, progress bars, colored output
+
+bump-core/              (separate repo, imported as a Go module)
+├── shared/             # Common types, version utilities, interfaces
+├── parser/             # Auto-detection and delegation
+├── updater/            # Core update checking logic
+├── npm/                # npm ecosystem (package.json, .npmrc, npm registry)
+└── pub/                # Dart/Flutter pub ecosystem (pubspec.yaml, pub registry)
+```
 
 The CLI uses [spf13/pflag](https://github.com/spf13/pflag) for POSIX-compliant flag parsing with support for both long-form (`--flag`) and shorthand (`-f`) options, including merged shorthands (`-us`).
+
+A [VS Code extension](https://github.com/MilosRandelovic/vscode-bump) is also available, powered by the same bump-core library.
 
 ## Contributing
 

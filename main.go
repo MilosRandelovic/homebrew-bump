@@ -1,17 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/MilosRandelovic/bump-core/parser"
+	"github.com/MilosRandelovic/bump-core/shared"
+	"github.com/MilosRandelovic/bump-core/updater"
 	"github.com/MilosRandelovic/homebrew-bump/internal/output"
-	"github.com/MilosRandelovic/homebrew-bump/internal/parser"
-	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
-	"github.com/MilosRandelovic/homebrew-bump/internal/updater"
 	"github.com/spf13/pflag"
 )
 
-const version = "1.3.0"
+var version = shared.Version
 
 func main() {
 	var (
@@ -52,14 +53,27 @@ func main() {
 		Monorepo:                *monorepo,
 	}
 
+	// Verbose log function for bump-core callbacks
+	var log shared.LogFunc
+	if options.Verbose {
+		log = func(format string, args ...any) {
+			fmt.Printf(format, args...)
+		}
+	}
+
 	// Auto-detect dependency file in current directory
-	filePath, registryType, err := parser.AutoDetectDependencyFile(options)
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	filePath, registryType, err := parser.AutoDetectDependencyFile(workingDirectory, log)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if err := validateOptionsForRegistry(options, registryType); err != nil {
+	if err := updater.ValidateOptions(registryType, options); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -79,7 +93,7 @@ func main() {
 	}
 
 	// Check for outdated dependencies
-	result, err := updater.CheckOutdated(dependencies, registryType, options, progressCallback)
+	result, err := updater.CheckOutdated(context.Background(), dependencies, registryType, options, workingDirectory, progressCallback, log)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 		os.Exit(1)
@@ -104,7 +118,7 @@ func main() {
 	// Update if requested
 	if options.Update {
 		if len(result.Outdated) > 0 {
-			err := updater.UpdateDependencies(filePath, result.Outdated, registryType, options)
+			err := updater.UpdateDependencies(filePath, result.Outdated, registryType, options, workingDirectory, log)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\nError updating dependencies: %v\n", err)
 				os.Exit(1)
@@ -116,16 +130,4 @@ func main() {
 	} else {
 		output.PrintUpdatePrompt(len(result.Outdated) > 0, options.Semver)
 	}
-}
-
-func validateOptionsForRegistry(options shared.Options, registryType shared.RegistryType) error {
-	if registryType == shared.Pub && options.IncludePeerDependencies {
-		return fmt.Errorf("peer dependencies are not supported by pub")
-	}
-
-	if registryType == shared.Pub && options.Monorepo {
-		return fmt.Errorf("monorepo mode is only supported for npm projects")
-	}
-
-	return nil
 }

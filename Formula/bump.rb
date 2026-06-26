@@ -16,10 +16,10 @@ class Bump < Formula
 
   test do
     # Test version output
-    assert_match "bump version", shell_output("#{bin}/bump -version")
+    assert_match "bump version", shell_output("#{bin}/bump --version")
 
     # Test help output
-    assert_match "Usage: bump \\[options\\]", shell_output("#{bin}/bump -help")
+    assert_match "Usage: bump \\[options\\]", shell_output("#{bin}/bump --help")
 
     # Test error when no dependency files found
     assert_match "no package.json or pubspec.yaml found", shell_output("#{bin}/bump", 1)

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/MilosRandelovic/homebrew-bump/internal/shared"
+	"github.com/MilosRandelovic/bump-core/shared"
 )
 
 // Color constants for terminal output
@@ -33,11 +33,12 @@ func GetChangeColor(change shared.SemverChange) string {
 	}
 }
 
+var workingDir, _ = os.Getwd()
+
 // getDisplayPath converts an absolute path to a relative path for display
 func getDisplayPath(filePath string) string {
-	cwd, _ := os.Getwd()
-	if relPath, err := filepath.Rel(cwd, filePath); err == nil {
-		return relPath
+	if relativePath, err := filepath.Rel(workingDir, filePath); err == nil {
+		return relativePath
 	}
 	return filePath
 }
@@ -58,9 +59,9 @@ func PrintProgressBar(current, total int) {
 	}
 	bar += "]"
 
-	fmt.Printf("\r%s %d/%d %d%%", bar, current, total, int(progress*100))
+	fmt.Fprintf(os.Stderr, "\r%s %d/%d %d%%", bar, current, total, int(progress*100))
 	if current == total {
-		fmt.Println() // New line when complete
+		fmt.Fprintln(os.Stderr) // New line when complete
 	}
 }
 
@@ -89,13 +90,13 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 			fmt.Printf("\n%s:\n", getDisplayPath(file))
 		}
 
-		for _, depType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
-			dependencies := types[depType]
+		for _, dependencyType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
+			dependencies := types[dependencyType]
 			if len(dependencies) > 0 {
 				if showFilenames {
-					fmt.Printf("  %s:\n", depType.String())
+					fmt.Printf("  %s:\n", dependencyType.String())
 				} else {
-					fmt.Printf("\n%s:\n", depType.String())
+					fmt.Printf("\n%s:\n", dependencyType.String())
 				}
 				printDependencyList(dependencies, showFilenames)
 			}
@@ -105,8 +106,8 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 
 func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 	// Sort alphabetically by name
-	slices.SortFunc(outdated, func(a, b shared.OutdatedDependency) int {
-		return strings.Compare(a.Name, b.Name)
+	slices.SortFunc(outdated, func(first, second shared.OutdatedDependency) int {
+		return strings.Compare(first.Name, second.Name)
 	})
 
 	// Calculate maximum widths for proper alignment
@@ -179,16 +180,16 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Opt
 			}
 
 			// Display by dependency type in the same order as outdated
-			for _, depType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
-				skippedByType := grouped[file][depType]
+			for _, dependencyType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
+				skippedByType := grouped[file][dependencyType]
 				if len(skippedByType) == 0 {
 					continue
 				}
 
 				if showFilenames {
-					fmt.Printf("  %s:\n", depType.String())
+					fmt.Printf("  %s:\n", dependencyType.String())
 				} else {
-					fmt.Printf("\n%s:\n", depType.String())
+					fmt.Printf("\n%s:\n", dependencyType.String())
 				}
 
 				// Sort packages alphabetically within each type
@@ -225,8 +226,8 @@ func PrintErrors(errors []shared.DependencyError, options shared.Options) {
 	}
 
 	// Sort alphabetically by name
-	slices.SortFunc(errors, func(a, b shared.DependencyError) int {
-		return strings.Compare(a.Name, b.Name)
+	slices.SortFunc(errors, func(first, second shared.DependencyError) int {
+		return strings.Compare(first.Name, second.Name)
 	})
 
 	if options.Verbose {
