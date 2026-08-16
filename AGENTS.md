@@ -8,7 +8,7 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 
 ## Architecture
 
-- **bump-core** (`github.com/MilosRandelovic/bump-core`): All core logic — types, parsers, registry clients, updater, shared utilities. Referenced via `go.mod` replace directive pointing to `../bump-core`.
+- **bump-core** (`github.com/MilosRandelovic/bump-core/v2`): All core logic — types, parsers, registry clients, updater, shared utilities. `go.mod` pins a published release; use a local `go.work` file when developing both repositories together.
 - **homebrew-bump** (this repo): CLI entry point (`main.go`) and terminal output formatting (`internal/output/`). No business logic here.
 
 ### Key Integration Points

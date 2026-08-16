@@ -10,19 +10,12 @@ jobs:
     # Skip CI for automated Homebrew formula update PRs
     if: "!startsWith(github.head_ref, 'release/update_formula_')"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v7
       with:
         go-version: '1.26.1'
-
-    - name: Remove local replace directive if present
-      run: |
-        if grep -q 'replace github.com/MilosRandelovic/bump-core =>' go.mod; then
-          sed -i '/^replace github.com\/MilosRandelovic\/bump-core/d' go.mod
-          go mod tidy
-        fi
 
     - name: Install dependencies
       run: go mod download

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/MilosRandelovic/bump-core/parser"
-	"github.com/MilosRandelovic/bump-core/shared"
-	"github.com/MilosRandelovic/bump-core/updater"
+	"github.com/MilosRandelovic/bump-core/v2/parser"
+	"github.com/MilosRandelovic/bump-core/v2/shared"
+	"github.com/MilosRandelovic/bump-core/v2/updater"
 	"github.com/MilosRandelovic/homebrew-bump/internal/output"
 	"github.com/spf13/pflag"
 )

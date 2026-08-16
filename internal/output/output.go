@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/MilosRandelovic/bump-core/shared"
+	"github.com/MilosRandelovic/bump-core/v2/shared"
 )
 
 // Color constants for terminal output

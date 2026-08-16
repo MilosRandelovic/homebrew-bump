@@ -13,14 +13,14 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
         fetch-tags: true
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v7
       with:
         go-version: '1.26.1'
 
@@ -72,25 +72,21 @@ jobs:
       id: release_notes
       run: |
         PREVIOUS_TAG="${{ steps.previous_tag.outputs.previous_tag }}"
+        NOTES_FILE="$RUNNER_TEMP/release-notes.md"
         if [ -n "$PREVIOUS_TAG" ]; then
-          NOTES=$(git log --no-merges --pretty=format:"- %s %h" ${PREVIOUS_TAG}..HEAD)
+          git log --no-merges --pretty=format:"- %s %h" "${PREVIOUS_TAG}..HEAD" > "$NOTES_FILE"
         else
-          NOTES=$(git log --no-merges --pretty=format:"- %s %h" -50)
+          git log --no-merges --pretty=format:"- %s %h" -50 > "$NOTES_FILE"
         fi
-        echo "notes<<EOF" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "$NOTES" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
 
     - name: Create GitHub Release
       if: steps.check_tag.outputs.skip != 'true'
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ steps.version.outputs.tag }}
-        name: Release ${{ steps.version.outputs.tag }}
-        body: ${{ steps.release_notes.outputs.notes }}
+      run: gh release create "$RELEASE_TAG" --title "Release $RELEASE_TAG" --notes-file "$RELEASE_NOTES_FILE"
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        RELEASE_NOTES_FILE: ${{ steps.release_notes.outputs.notes_file }}
 
     - name: Update Homebrew Formula
       if: steps.check_tag.outputs.skip != 'true'
@@ -107,7 +103,7 @@ jobs:
 
     - name: Create Pull Request for formula update
       if: steps.check_tag.outputs.skip != 'true'
-      uses: peter-evans/create-pull-request@v5
+      uses: peter-evans/create-pull-request@v8
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"

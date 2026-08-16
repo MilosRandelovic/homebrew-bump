@@ -6,6 +6,7 @@ This file tracks CLI-specific changes (flags, output formatting, terminal UI).
 
 ## [2.0.0]
 
+- Consume bump-core through its versioned `/v2` Go module path
 - Extracted all core logic into [bump-core](https://github.com/MilosRandelovic/bump-core)
 - homebrew-bump is now a thin CLI wrapper that imports bump-core as a Go module
 - Version is sourced from bump-core (`shared.Version`)
