@@ -202,7 +202,7 @@ homebrew-bump/          (this repo)
 └── internal/
     └── output/         # Terminal output formatting, progress bars, colored output
 
-bump-core/              (separate repo, imported as a Go module)
+bump-core/              (separate repo, imported as github.com/MilosRandelovic/bump-core/v2)
 ├── shared/             # Common types, version utilities, interfaces
 ├── parser/             # Auto-detection and delegation
 ├── updater/            # Core update checking logic
