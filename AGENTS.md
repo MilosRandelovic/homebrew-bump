@@ -65,10 +65,11 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 
 ## Testing Patterns
 
-- Always use MockRegistryClient for testing update logic
-- Test with realistic package.json and pubspec.yaml content
-- Include scoped packages (@company/package) and hosted packages in tests
-- Verify both success and error paths
+- Run `make smoke` to build the CLI and verify version output, help output, and missing dependency-file handling.
+- Keep registry and dependency-update tests in `bump-core`; this repository should test CLI orchestration and terminal output only.
+- Formula changes must install successfully from source and pass `brew test bump` on macOS.
+- Formula update pull requests must run CI; do not exempt their branches from validation.
+- Validate workflow changes with Actionlint.
 
 ## File Structure Understanding
 

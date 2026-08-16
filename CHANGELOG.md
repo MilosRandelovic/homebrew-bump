@@ -10,6 +10,7 @@ This file tracks CLI-specific changes (flags, output formatting, terminal UI).
 - Extracted all core logic into [bump-core](https://github.com/MilosRandelovic/bump-core)
 - homebrew-bump is now a thin CLI wrapper that imports bump-core as a Go module
 - Version is sourced from bump-core (`shared.Version`)
+- Validate CLI behavior and Homebrew formula updates in CI
 
 ## [1.3.0]
 

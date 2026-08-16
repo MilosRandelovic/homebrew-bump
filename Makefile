@@ -1,6 +1,6 @@
 # Bump Makefile
 
-.PHONY: build clean test install help
+.PHONY: build clean smoke install help
 
 # Default target
 all: build
@@ -13,9 +13,9 @@ build:
 clean:
 	rm -f bump
 
-# Run tests
-test:
-	go test ./...
+# Run CLI smoke tests
+smoke: build
+	./scripts/smoke-test.sh ./bump
 
 # Install dependencies
 deps:
@@ -30,7 +30,7 @@ help:
 	@echo "Available targets:"
 	@echo "  build    - Build the application"
 	@echo "  clean    - Clean build artifacts"
-	@echo "  test     - Run tests"
+	@echo "  smoke    - Build and run CLI smoke tests"
 	@echo "  deps     - Install dependencies"
 	@echo "  install  - Install binary to GOPATH/bin"
 	@echo "  help     - Show this help"
