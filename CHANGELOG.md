@@ -4,6 +4,11 @@ Starting with v2.0.0, all core logic lives in [bump-core](https://github.com/Mil
 
 This file tracks CLI-specific changes (flags, output formatting, terminal UI).
 
+## [2.1.0]
+
+- Add `--minimum-age` / `-a` to exclude releases published within the last 24 hours
+- Display non-verbose dependency-check progress separately for each file
+
 ## [2.0.0]
 
 - Consume bump-core through its versioned `/v2` Go module path

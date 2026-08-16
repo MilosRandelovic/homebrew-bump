@@ -12,6 +12,7 @@ This is a thin CLI wrapper around [bump-core](https://github.com/MilosRandelovic
 - Update dependencies to their latest versions
 - Preserve version prefixes (^, ~, >=, etc.)
 - Optionally check for updates while respecting semver constraints
+- Optionally exclude releases published within the last 24 hours
 - Optionally check for peer dependencies updates in `package.json`
 - Optional monorepo support for npm workspaces
 - Built in support for private registries and hosted packages
@@ -69,6 +70,16 @@ This mode will:
 - Skip packages with hardcoded versions (no prefix)
 - Skip updates that would violate semver rules
 
+### Exclude recently published releases
+
+```bash
+bump --minimum-age
+# or
+bump -a
+```
+
+This mode only suggests versions published more than 24 hours ago. The age is fixed and cannot be configured.
+
 ### Parse monorepo workspaces
 
 ```bash
@@ -107,6 +118,9 @@ bump -us
 
 # Check with semver constraints and verbose output
 bump -sv
+
+# Update using versions more than 24 hours old
+bump -ua
 ```
 
 ### Show version
@@ -121,6 +135,7 @@ bump -V
 
 - `--update, -u`: Update dependencies to latest versions
 - `--semver, -s`: Respect semver constraints (^, ~) and skip hardcoded versions
+- `--minimum-age, -a`: Only suggest versions published more than 24 hours ago
 - `--verbose, -v`: Enable verbose output
 - `--no-cache, -C`: Disable caching of registry lookups
 - `--include-peers, -P`: Include peer dependencies when updating (npm only)

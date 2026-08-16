@@ -12,9 +12,20 @@ if [[ ! "$VERSION_OUTPUT" =~ ^bump\ version\ [0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za
   exit 1
 fi
 
+MINIMUM_AGE_VERSION_OUTPUT="$("$BINARY_PATH" -aV)"
+if [ "$MINIMUM_AGE_VERSION_OUTPUT" != "$VERSION_OUTPUT" ]; then
+  echo "Merged minimum-age shorthand produced unexpected version output: $MINIMUM_AGE_VERSION_OUTPUT" >&2
+  exit 1
+fi
+
 HELP_OUTPUT="$("$BINARY_PATH" --help)"
 if ! grep -Fq "Usage: bump [options]" <<<"$HELP_OUTPUT"; then
   echo "Help output does not contain the usage line" >&2
+  exit 1
+fi
+
+if ! grep -Fq -- "--minimum-age, -a" <<<"$HELP_OUTPUT"; then
+  echo "Help output does not document the minimum-age flag" >&2
   exit 1
 fi
 

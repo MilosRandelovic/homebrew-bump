@@ -19,6 +19,7 @@ func main() {
 		update                  = pflag.BoolP("update", "u", false, "Update dependencies to latest versions")
 		verbose                 = pflag.BoolP("verbose", "v", false, "Enable verbose output")
 		semver                  = pflag.BoolP("semver", "s", false, "Respect semver constraints (^, ~) and skip hardcoded versions")
+		minimumAge              = pflag.BoolP("minimum-age", "a", false, "Only suggest versions published more than 24 hours ago")
 		noCache                 = pflag.BoolP("no-cache", "C", false, "Disable caching of registry lookups")
 		includePeerDependencies = pflag.BoolP("include-peers", "P", false, "Include peer dependencies when updating")
 		monorepo                = pflag.BoolP("monorepo", "m", false, "Parse workspace packages in monorepo")
@@ -45,12 +46,13 @@ func main() {
 
 	// Create options struct from flags
 	options := shared.Options{
-		Verbose:                 *verbose,
-		Update:                  *update,
-		Semver:                  *semver,
-		NoCache:                 *noCache,
-		IncludePeerDependencies: *includePeerDependencies,
-		Monorepo:                *monorepo,
+		Verbose:                  *verbose,
+		Update:                   *update,
+		Semver:                   *semver,
+		NoCache:                  *noCache,
+		IncludePeerDependencies:  *includePeerDependencies,
+		Monorepo:                 *monorepo,
+		EnforceMinimumReleaseAge: *minimumAge,
 	}
 
 	// Verbose log function for bump-core callbacks
@@ -87,13 +89,14 @@ func main() {
 
 	output.VerbosePrintf(options, "Found %d dependencies\n", len(dependencies))
 
-	var progressCallback func(current, total int)
+	var progressCallback shared.ProgressFunc
 	if !options.Verbose {
 		progressCallback = output.PrintProgressBar
 	}
 
 	// Check for outdated dependencies
-	result, err := updater.CheckOutdated(context.Background(), dependencies, registryType, options, workingDirectory, progressCallback, log)
+	ctx := context.Background()
+	result, err := updater.CheckOutdated(ctx, dependencies, registryType, options, workingDirectory, progressCallback, log)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 		os.Exit(1)
@@ -118,7 +121,7 @@ func main() {
 	// Update if requested
 	if options.Update {
 		if len(result.Outdated) > 0 {
-			err := updater.UpdateDependencies(filePath, result.Outdated, registryType, options, workingDirectory, log)
+			err := updater.UpdateDependencies(ctx, filePath, result.Outdated, registryType, options, workingDirectory, log)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\nError updating dependencies: %v\n", err)
 				os.Exit(1)
@@ -128,6 +131,6 @@ func main() {
 			fmt.Println("\nNo dependencies to update.")
 		}
 	} else {
-		output.PrintUpdatePrompt(len(result.Outdated) > 0, options.Semver)
+		output.PrintUpdatePrompt(len(result.Outdated) > 0, options)
 	}
 }
