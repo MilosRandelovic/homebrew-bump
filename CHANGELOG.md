@@ -4,6 +4,11 @@ Starting with v2.0.0, all core logic lives in [bump-core](https://github.com/Mil
 
 This file tracks CLI-specific changes (flags, output formatting, terminal UI).
 
+## [2.2.0]
+
+- Install the bump MCP server alongside the CLI for scoped absolute, semver-compatible, and minimum-age dependency checks and updates
+- Show MCP client registration commands after Homebrew installation
+
 ## [2.1.0]
 
 - Add `--minimum-age` / `-a` to exclude releases published within the last 24 hours

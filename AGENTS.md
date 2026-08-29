@@ -10,6 +10,7 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 
 - **bump-core** (`github.com/MilosRandelovic/bump-core/v2`): All core logic — types, parsers, registry clients, updater, shared utilities. `go.mod` pins a published release; use a local `go.work` file when developing both repositories together.
 - **homebrew-bump** (this repo): CLI entry point (`main.go`) and terminal output formatting (`internal/output/`). No business logic here.
+- **bump-mcp** (`github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp`): MCP server owned by bump-core and installed by this repository's Homebrew formula.
 
 ### Key Integration Points
 
@@ -70,6 +71,8 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 - Run `make smoke` to build the CLI and verify version output, help output, and missing dependency-file handling.
 - Keep registry and dependency-update tests in `bump-core`; this repository should test CLI orchestration and terminal output only.
 - Formula changes must install successfully from source and pass `brew test bump` on macOS.
+- The formula must install both `bump` and `bump-mcp`; build the MCP command from its explicit bump-core module version rather than duplicating its implementation here.
+- MCP version policies and package, dependency-type, and file targeting belong in bump-core and must remain identical to the sidecar protocol.
 - Formula update pull requests must run CI; do not exempt their branches from validation.
 - Validate workflow changes with Actionlint.
 

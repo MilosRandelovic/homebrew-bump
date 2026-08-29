@@ -11,7 +11,17 @@ class Bump < Formula
   depends_on "go" => :build
 
   def install
-    system "go", "build", *std_go_args(ldflags: "-s -w"), "-o", bin/"bump"
+    system "go", "build", *std_go_args(output: bin/"bump"), "."
+    ENV["GOBIN"] = bin
+    system "go", "install", "github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp@v2.2.0"
+  end
+
+  def caveats
+    <<~EOS
+      To register the MCP server with a supported client:
+        claude mcp add bump -- #{opt_bin}/bump-mcp
+        codex mcp add bump -- #{opt_bin}/bump-mcp
+    EOS
   end
 
   test do
@@ -20,6 +30,9 @@ class Bump < Formula
 
     # Test help output
     assert_match "Usage: bump [options]", shell_output("#{bin}/bump --help")
+
+    # Test MCP server version output
+    assert_match "bump-mcp version", shell_output("#{bin}/bump-mcp --version")
 
     # Test error when no dependency files found
     assert_match "no package.json or pubspec.yaml found", shell_output("#{bin}/bump 2>&1", 1)

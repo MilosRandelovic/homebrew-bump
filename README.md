@@ -17,6 +17,7 @@ This is a thin CLI wrapper around [bump-core](https://github.com/MilosRandelovic
 - Optional monorepo support for npm workspaces
 - Built in support for private registries and hosted packages
 - Uses cache when running multiple `bump` commands in quick succession
+- Includes an MCP server for coding agents
 
 ## Installation
 
@@ -33,12 +34,28 @@ brew install bump
 ### From source
 
 ```bash
-go build -o bump
+make build
 ```
 
 ### Direct download
 
 Download the latest release from the [GitHub releases page](https://github.com/MilosRandelovic/homebrew-bump/releases).
+
+## Agent access (MCP)
+
+The Homebrew formula installs `bump-mcp` alongside the CLI. Register it once with each MCP client that should be able to manage dependency updates:
+
+```bash
+claude mcp add bump -- bump-mcp
+codex mcp add bump -- bump-mcp
+```
+
+The server exposes two tools:
+
+- `check_updates` detects `package.json` or `pubspec.yaml` in a project directory, checks the requested dependency targets using the requested version policy, and returns available updates, skipped dependencies, errors, and a `checkId`.
+- `update_dependencies` accepts that single-use `checkId` and applies the exact checked update set. If a dependency file changed after the check, the update fails safely.
+
+The check tool supports absolute latest, semantic-version-compatible latest, fixed 24-hour minimum-age latest, and combined semver-plus-minimum-age queries. Each query can target an exact package, dependency type, file, combination, or union. It also supports cache bypass, npm peer dependencies, and npm workspaces.
 
 ## Usage
 
@@ -218,6 +235,7 @@ homebrew-bump/          (this repo)
     └── output/         # Terminal output formatting, progress bars, colored output
 
 bump-core/              (separate repo, imported as github.com/MilosRandelovic/bump-core/v2)
+├── cmd/bump-mcp/       # MCP server installed by the Homebrew formula
 ├── shared/             # Common types, version utilities, interfaces
 ├── parser/             # Auto-detection and delegation
 ├── updater/            # Core update checking logic
