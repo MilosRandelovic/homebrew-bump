@@ -12,24 +12,24 @@ import (
 
 // Color constants for terminal output
 const (
-	ColorReset  = "\033[0m"
-	ColorRed    = "\033[31m" // Major version changes
-	ColorYellow = "\033[33m" // Minor version changes
-	ColorGreen  = "\033[32m" // Patch version changes
-	ColorCyan   = "\033[36m" // Package names
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m" // Major version changes
+	colorYellow = "\033[33m" // Minor version changes
+	colorGreen  = "\033[32m" // Patch version changes
+	colorCyan   = "\033[36m" // Package names
 )
 
-// GetChangeColor returns the appropriate color for the version change type
-func GetChangeColor(change shared.SemverChange) string {
+// getChangeColor returns the appropriate color for the version change type
+func getChangeColor(change shared.SemverChange) string {
 	switch change {
 	case shared.MajorChange:
-		return ColorRed
+		return colorRed
 	case shared.MinorChange:
-		return ColorYellow
+		return colorYellow
 	case shared.PatchChange:
-		return ColorGreen
+		return colorGreen
 	default:
-		return ColorReset
+		return colorReset
 	}
 }
 
@@ -43,9 +43,14 @@ func getDisplayPath(filePath string) string {
 	return filePath
 }
 
-// PrintProgressBar prints a progress bar to stdout
-func PrintProgressBar(current, total int) {
+// PrintProgressBar writes the current file's progress bar to standard error and ends the line when that file completes.
+func PrintProgressBar(progressUpdate shared.Progress) {
 	const barWidth = 20
+	current := progressUpdate.FileCurrent
+	total := progressUpdate.FileTotal
+	if total == 0 {
+		return
+	}
 	progress := float64(current) / float64(total)
 	filled := int(progress * barWidth)
 
@@ -59,13 +64,13 @@ func PrintProgressBar(current, total int) {
 	}
 	bar += "]"
 
-	fmt.Fprintf(os.Stderr, "\r%s %d/%d %d%%", bar, current, total, int(progress*100))
+	fmt.Fprintf(os.Stderr, "\r%s %s %d/%d %d%%", getDisplayPath(progressUpdate.FilePath), bar, current, total, int(progress*100))
 	if current == total {
 		fmt.Fprintln(os.Stderr) // New line when complete
 	}
 }
 
-// PrintOutdatedDependencies displays the list of outdated dependencies with color-coded changes
+// PrintOutdatedDependencies writes color-coded updates to standard output, grouped by file and dependency type and sorted by package name.
 func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options shared.Options) {
 	if len(outdated) == 0 {
 		return
@@ -105,6 +110,7 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 }
 
 func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
+
 	// Sort alphabetically by name
 	slices.SortFunc(outdated, func(first, second shared.OutdatedDependency) int {
 		return strings.Compare(first.Name, second.Name)
@@ -133,7 +139,7 @@ func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 
 	for _, dependency := range outdated {
 		change := shared.GetSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
-		color := GetChangeColor(change)
+		color := getChangeColor(change)
 
 		// Use the original version from the dependency struct
 		currentVersion := dependency.OriginalVersion
@@ -143,19 +149,21 @@ func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 		// Apply color to output for better visibility
 		fmt.Printf("%s%s%-*s%s  %*s  →  %s%s%s\n",
 			indent,
-			ColorCyan, maxNameWidth, dependency.Name, ColorReset,
+			colorCyan, maxNameWidth, dependency.Name, colorReset,
 			maxCurrentVersionWidth, currentVersion,
-			color, latestVersion, ColorReset)
+			color, latestVersion, colorReset)
 	}
 }
 
-// PrintSemverSkipped displays packages that were skipped due to semver constraints
+// PrintSemverSkipped writes skipped packages to standard output.
+// Verbose mode prints sorted package details; otherwise it prints only a count and rerun hint.
 func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Options) {
 	if len(semverSkipped) == 0 {
 		return
 	}
 
 	if options.Verbose {
+
 		// Group by file and type, then deduplicate within each group
 		grouped := make(map[string]map[shared.DependencyType]map[string]shared.SemverSkipped)
 		files := []string{}
@@ -207,9 +215,9 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Opt
 				for _, name := range names {
 					skipped := skippedByType[name]
 					if skipped.LatestVersion != "" {
-						fmt.Printf("%s%s%s%s: %s → %s (%s)\n", indent, ColorCyan, skipped.Name, ColorReset, skipped.OriginalVersion, skipped.LatestVersion, skipped.Reason)
+						fmt.Printf("%s%s%s%s: %s → %s (%s)\n", indent, colorCyan, skipped.Name, colorReset, skipped.OriginalVersion, skipped.LatestVersion, skipped.Reason)
 					} else {
-						fmt.Printf("%s%s%s%s: %s (%s)\n", indent, ColorCyan, skipped.Name, ColorReset, skipped.OriginalVersion, skipped.Reason)
+						fmt.Printf("%s%s%s%s: %s (%s)\n", indent, colorCyan, skipped.Name, colorReset, skipped.OriginalVersion, skipped.Reason)
 					}
 				}
 			}
@@ -219,7 +227,8 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Opt
 	}
 }
 
-// PrintErrors displays errors encountered during dependency checking
+// PrintErrors writes dependency-check failures to standard output.
+// Verbose mode prints sorted error details; otherwise it prints only a count and rerun hint.
 func PrintErrors(errors []shared.DependencyError, options shared.Options) {
 	if len(errors) == 0 {
 		return
@@ -233,7 +242,7 @@ func PrintErrors(errors []shared.DependencyError, options shared.Options) {
 	if options.Verbose {
 		fmt.Printf("\nErrors encountered:\n")
 		for _, dependencyError := range errors {
-			fmt.Printf("  %s%s%s: %s\n", ColorCyan, dependencyError.Name, ColorReset, dependencyError.Error)
+			fmt.Printf("  %s%s%s: %s\n", colorCyan, dependencyError.Name, colorReset, dependencyError.Error)
 		}
 	} else {
 		if options.Semver {
@@ -244,27 +253,30 @@ func PrintErrors(errors []shared.DependencyError, options shared.Options) {
 	}
 }
 
-// PrintUpdatePrompt displays a message prompting the user to run the update command
-func PrintUpdatePrompt(hasOutdated, semver bool) {
+// PrintUpdatePrompt writes the update command required to preserve the active semantic-version and minimum-age options when updates exist.
+func PrintUpdatePrompt(hasOutdated bool, options shared.Options) {
 	if !hasOutdated {
 		return
 	}
 
-	if semver {
-		fmt.Printf("\nRun 'bump --update --semver' to update dependencies while respecting semver constraints.\n")
-	} else {
-		fmt.Printf("\nRun 'bump --update' to update dependencies to latest versions.\n")
+	args := []string{"--update"}
+	if options.Semver {
+		args = append(args, "--semver")
 	}
+	if options.EnforceMinimumReleaseAge {
+		args = append(args, "--minimum-age")
+	}
+	fmt.Printf("\nRun 'bump %s' to apply these dependency updates.\n", strings.Join(args, " "))
 }
 
-// VerbosePrintf prints formatted output only if verbose mode is enabled
+// VerbosePrintf writes formatted text to standard output only when verbose mode is enabled.
 func VerbosePrintf(options shared.Options, format string, args ...any) {
 	if options.Verbose {
 		fmt.Printf(format, args...)
 	}
 }
 
-// PrintHelp displays the help message for the bump CLI tool
+// PrintHelp writes CLI usage and the supplied version to standard output.
 func PrintHelp(version string) {
 	fmt.Printf("bump v%s - A utility to check and update dependencies\n\n", version)
 	fmt.Println("Usage: bump [options]")
@@ -277,6 +289,7 @@ func PrintHelp(version string) {
 	fmt.Println("  --verbose, -v        Enable verbose output")
 	fmt.Println("  --update, -u         Update dependencies to latest versions")
 	fmt.Println("  --semver, -s         Respect semver constraints (^, ~) and skip hardcoded versions")
+	fmt.Println("  --minimum-age, -a    Only suggest versions published more than 24 hours ago")
 	fmt.Println("  --no-cache, -C       Disable caching of registry lookups")
 	fmt.Println("  --include-peers, -P  Include peer dependencies when updating [npm only]")
 	fmt.Println("  --monorepo, -m       Parse workspace packages in monorepo [npm only]")
@@ -290,5 +303,6 @@ func PrintHelp(version string) {
 	fmt.Println("  bump -uv           # Update with verbose output (merged shorthands)")
 	fmt.Println("  bump -s            # Check with semver constraints")
 	fmt.Println("  bump -us           # Update with semver constraints (merged)")
+	fmt.Println("  bump -ua           # Update using versions more than 24 hours old")
 	fmt.Println("  bump -uP           # Update including peer dependencies")
 }

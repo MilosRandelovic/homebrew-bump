@@ -1,6 +1,6 @@
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
-github.com/MilosRandelovic/bump-core/v2 v2.0.0 h1:/adnMEizlorUzIOZZGfMDNiegr2q+4EfU7D5Ej6TH9c=
-github.com/MilosRandelovic/bump-core/v2 v2.0.0/go.mod h1:SggjQX3WqAZ75gtPU2ebyY7Aqa5ah444Ekv4atl2eqA=
+github.com/MilosRandelovic/bump-core/v2 v2.1.0 h1:8wRXqBHga4HN7T93QDjC1BWPv4Pk6uK+phFgvZD7hPc=
+github.com/MilosRandelovic/bump-core/v2 v2.1.0/go.mod h1:A1gkKrDagUglRnq7oLtrfSE/70aeQmYW3LKSj1Xv+Y0=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=

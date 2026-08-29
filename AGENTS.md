@@ -15,8 +15,8 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 
 - `parser.AutoDetectDependencyFile(directory, logFunc)` — takes a directory path and a `shared.LogFunc` callback (or nil)
 - `parser.ParseDependencies(filePath, registryType, options)` — parses dependencies from a file
-- `updater.CheckOutdated(deps, registryType, options, workingDirectory, progressCallback, logFunc)` — checks for outdated deps
-- `updater.UpdateDependencies(filePath, outdated, registryType, options, workingDirectory, logFunc)` — updates dependency files
+- `updater.CheckOutdated(ctx, dependencies, registryType, options, workingDirectory, progressFunc, logFunc)` — checks for outdated dependencies
+- `updater.UpdateDependencies(ctx, filePath, outdated, registryType, options, workingDirectory, logFunc)` — updates dependency files
 - The CLI creates a `shared.LogFunc` that wraps `fmt.Printf` when verbose mode is enabled, or passes nil otherwise
 
 ## Code Patterns to Follow
@@ -31,6 +31,7 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 - bump-core functions accept `log shared.LogFunc` callbacks for verbose output
 - The CLI creates one when `--verbose` is set: `func(format string, args ...any) { fmt.Printf(format, args...) }`
 - Pass nil when verbose is off — bump-core handles nil checks internally
+- `--minimum-age` / `-a` sets `shared.Options.EnforceMinimumReleaseAge`; the fixed policy only suggests releases published more than 24 hours ago and never downgrades the current version
 
 ### Output Formatting (this repo's responsibility)
 
@@ -60,11 +61,12 @@ The repo has a `homebrew` prefix as the tool is available as a Homebrew tap (ref
 - Don't make redundant API calls - use GetBothLatestVersions instead of separate calls
 - Don't mix error types - constraint mismatches are semverSkipped, not errors
 - Don't hardcode registry URLs - parse from configuration files
-- Don't abbreviate function and variable names - use full descriptive names instead
-- Don't add comments for the sake of documenting what you just changed
+- Use concise, idiomatic Go names. Keep conventional or immediately obvious abbreviations such as `ctx`, `err`, `ok`, `i`, `t`, `max`, `min`, `args`, `config`, and `info`; expand abbreviations whose meaning is unclear from their scope and domain.
+- Do not add comments merely to narrate the code or document what changed. Keep comments for public API contracts and non-obvious intent.
 
 ## Testing Patterns
 
+- Run `go test ./...` for CLI orchestration and output changes.
 - Run `make smoke` to build the CLI and verify version output, help output, and missing dependency-file handling.
 - Keep registry and dependency-update tests in `bump-core`; this repository should test CLI orchestration and terminal output only.
 - Formula changes must install successfully from source and pass `brew test bump` on macOS.
