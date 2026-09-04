@@ -24,10 +24,8 @@ This is a thin CLI wrapper around [bump-core](https://github.com/MilosRandelovic
 ### Via Homebrew (Recommended)
 
 ```bash
-# Add the tap
-brew tap MilosRandelovic/homebrew-bump
-
-# Install bump
+brew tap MilosRandelovic/bump
+brew trust --formula MilosRandelovic/bump/bump
 brew install bump
 ```
 
