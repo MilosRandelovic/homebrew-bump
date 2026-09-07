@@ -20,26 +20,32 @@ jobs:
       run: go mod download
 
     - name: Check formatting
-      run: |
-        if [ "$(gofmt -l .)" != "" ]; then
-          echo "The following files are not properly formatted:"
-          gofmt -l .
-          echo "Please run 'gofmt -w .' to fix formatting issues."
-          exit 1
-        fi
+      run: test -z "$(gofmt -l .)"
 
     - name: Run go vet
-      run: go vet -all ./...
+      run: go vet ./...
 
     - name: Run tests
-      run: go test -v ./...
+      run: go test ./...
+
+    - name: Run race detector
+      run: go test -race ./...
 
     - name: Build and run CLI smoke tests
       run: make smoke
 
+    - name: Install ShellCheck
+      run: brew install shellcheck
+
+    - name: Run ShellCheck
+      run: shellcheck scripts/*.sh
+
+    - name: Check formula style
+      run: brew style Formula/bump.rb
+
     - name: Register checkout as tap
       run: |
-        brew tap MilosRandelovic/bump "$GITHUB_WORKSPACE"
+        brew tap MilosRandelovic/bump "$PWD"
         brew trust --formula MilosRandelovic/bump/bump
 
     - name: Install formula from source

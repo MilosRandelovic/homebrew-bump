@@ -17,7 +17,7 @@ func TestPrintUpdatePromptPreservesMinimumAge(t *testing.T) {
 	originalStdout := os.Stdout
 	os.Stdout = writePipe
 
-	PrintUpdatePrompt(true, shared.Options{Semver: true, EnforceMinimumReleaseAge: true})
+	PrintUpdatePrompt(true, Config{Semver: true, MinimumAge: true})
 	os.Stdout = originalStdout
 	if err := writePipe.Close(); err != nil {
 		t.Fatal(err)

@@ -1,10 +1,7 @@
-# Documentation:
-# - https://docs.brew.sh/Formula-Cookbook
-# - https://rubydoc.brew.sh/Formula
 class Bump < Formula
-  desc "A utility to check and update package dependencies"
+  desc "Check and update package dependencies"
   homepage "https://github.com/MilosRandelovic/homebrew-bump"
-  url "https://github.com/MilosRandelovic/homebrew-bump/archive/v2.2.0.tar.gz"
+  url "https://github.com/MilosRandelovic/homebrew-bump/archive/refs/tags/v2.2.0.tar.gz"
   sha256 "c031a798bedec5a31cd44b6a31f42fd89c61d00377fffb049d3f395e4bc96fcf"
   license "MIT"
 
@@ -25,16 +22,9 @@ class Bump < Formula
   end
 
   test do
-    # Test version output
     assert_match "bump version", shell_output("#{bin}/bump --version")
-
-    # Test help output
     assert_match "Usage: bump [options]", shell_output("#{bin}/bump --help")
-
-    # Test MCP server version output
     assert_match "bump-mcp version", shell_output("#{bin}/bump-mcp --version")
-
-    # Test error when no dependency files found
     assert_match "no package.json or pubspec.yaml found", shell_output("#{bin}/bump 2>&1", 1)
   end
 end

@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
+# Verify the locally built Bump CLI and MCP binaries without contacting a package registry.
+# Bash is required for regular-expression matching and the script runs on macOS/Homebrew CI.
+# Usage: smoke-test.sh [bump-binary] [bump-mcp-binary]
+# Options: --help  Show this help text.
 
 set -euo pipefail
 
-BINARY_PATH="${1:-./bump}"
+if [ "${1:-}" = "--help" ]; then
+  sed -n '2,5s/^# //p' "$0"
+  exit 0
+fi
+
+SCRIPT_DIRECTORY="$(cd "$(dirname "$0")" && pwd)"
+REPOSITORY_ROOT="$(cd "$SCRIPT_DIRECTORY/.." && pwd)"
+
+BINARY_PATH="${1:-$REPOSITORY_ROOT/bump}"
 BINARY_DIRECTORY="$(cd "$(dirname "$BINARY_PATH")" && pwd)"
 BINARY_PATH="$BINARY_DIRECTORY/$(basename "$BINARY_PATH")"
-MCP_BINARY_PATH="${2:-./bump-mcp}"
+MCP_BINARY_PATH="${2:-$REPOSITORY_ROOT/bump-mcp}"
 MCP_BINARY_DIRECTORY="$(cd "$(dirname "$MCP_BINARY_PATH")" && pwd)"
 MCP_BINARY_PATH="$MCP_BINARY_DIRECTORY/$(basename "$MCP_BINARY_PATH")"
 

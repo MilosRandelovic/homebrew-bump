@@ -28,8 +28,8 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
-    - name: Build and run CLI smoke tests
-      run: make smoke
+    - name: Build release commands
+      run: make build
 
     - name: Extract version
       id: version
@@ -92,7 +92,7 @@ jobs:
     - name: Update Homebrew Formula
       if: steps.check_tag.outputs.skip != 'true'
       run: |
-        RELEASE_URL="https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz"
+        RELEASE_URL="https://github.com/MilosRandelovic/homebrew-bump/archive/refs/tags/${{ steps.version.outputs.tag }}.tar.gz"
         SHA256=$(curl -sLf "$RELEASE_URL" | sha256sum | cut -d' ' -f1)
 
         sed -i "s|url \".*\"|url \"$RELEASE_URL\"|" Formula/bump.rb
