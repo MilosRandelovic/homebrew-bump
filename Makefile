@@ -1,5 +1,4 @@
 MCP_PACKAGE := github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp
-MCP_VERSION := v2.2.0
 ACTIONLINT_VERSION := v1.7.12
 
 .PHONY: all build clean smoke deps install help workflow-lint
@@ -8,7 +7,7 @@ all: build
 
 build:
 	go build -o bump
-	GOBIN="$(CURDIR)" go install $(MCP_PACKAGE)@$(MCP_VERSION)
+	go build -o bump-mcp $(MCP_PACKAGE)
 
 clean:
 	rm -f bump bump-mcp
@@ -21,7 +20,7 @@ deps:
 
 install: build
 	go install
-	go install $(MCP_PACKAGE)@$(MCP_VERSION)
+	go install $(MCP_PACKAGE)
 
 workflow-lint:
 	go run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION) .github/workflows/*.yml

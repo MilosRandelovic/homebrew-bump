@@ -39,6 +39,11 @@ if [[ ! "$MCP_VERSION_OUTPUT" =~ ^bump-mcp\ version\ [0-9]+\.[0-9]+\.[0-9]+([.-]
   exit 1
 fi
 
+if [ "${MCP_VERSION_OUTPUT##* }" != "${VERSION_OUTPUT##* }" ]; then
+  echo "Bump and bump-mcp versions do not match: $VERSION_OUTPUT; $MCP_VERSION_OUTPUT" >&2
+  exit 1
+fi
+
 "$MCP_BINARY_PATH" </dev/null
 
 HELP_OUTPUT="$("$BINARY_PATH" --help)"
