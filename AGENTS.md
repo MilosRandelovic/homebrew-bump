@@ -37,6 +37,7 @@ scripts/         Local and CI smoke validation
 - File updates preserve constraints, formatting, hosted references, and unrelated content through bump-core. Monorepo results are grouped by each dependency's `FilePath`.
 - The smoke test never contacts a package registry. It validates built command versions, help, combined shorthand parsing, MCP startup, and missing dependency-file failure. Bound MCP startup, initialize response, and shutdown, and terminate and reap the child after any failure so a stalled server cannot hang CI.
 - The formula installs both `bump` and `bump-mcp`, and its MCP module version must match the direct bump-core dependency in `go.mod`.
+- Build the formula's MCP command with `-mod=mod`: older release archives can lack checksums for the transitive dependencies of bump-core's MCP package, which is not imported by the CLI module itself.
 
 ## Contracts and siblings
 

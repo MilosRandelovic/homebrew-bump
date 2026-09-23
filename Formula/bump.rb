@@ -9,7 +9,7 @@ class Bump < Formula
 
   def install
     system "go", "build", *std_go_args(output: bin/"bump"), "."
-    system "go", "build", "-o", bin/"bump-mcp", "github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp"
+    system "go", "build", "-mod=mod", "-o", bin/"bump-mcp", "github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp"
   end
 
   def caveats
