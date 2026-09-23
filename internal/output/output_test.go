@@ -1,6 +1,7 @@
 package output
 
 import (
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -8,6 +9,17 @@ import (
 
 	"github.com/MilosRandelovic/bump-core/v2/shared"
 )
+
+func TestGetDisplayPathRetainsPathWhenWorkingDirectoryFails(t *testing.T) {
+	originalLookup := lookupWorkingDirectory
+	lookupWorkingDirectory = func() (string, error) { return "", errors.New("unavailable") }
+	t.Cleanup(func() { lookupWorkingDirectory = originalLookup })
+
+	filePath := "/project/package.json"
+	if got := getDisplayPath(filePath); got != filePath {
+		t.Fatalf("getDisplayPath() = %q, want %q", got, filePath)
+	}
+}
 
 func TestPrintUpdatePromptPreservesMinimumAge(t *testing.T) {
 	readPipe, writePipe, err := os.Pipe()

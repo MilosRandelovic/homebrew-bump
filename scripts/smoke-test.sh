@@ -44,7 +44,33 @@ if [ "${MCP_VERSION_OUTPUT##* }" != "${VERSION_OUTPUT##* }" ]; then
   exit 1
 fi
 
-"$MCP_BINARY_PATH" </dev/null
+TEMPORARY_DIRECTORY="$(mktemp -d)"
+trap 'rm -rf "$TEMPORARY_DIRECTORY"' EXIT
+mkfifo "$TEMPORARY_DIRECTORY/mcp-request" "$TEMPORARY_DIRECTORY/mcp-response"
+"$MCP_BINARY_PATH" <"$TEMPORARY_DIRECTORY/mcp-request" >"$TEMPORARY_DIRECTORY/mcp-response" &
+MCP_SERVER_PID=$!
+exec 3>"$TEMPORARY_DIRECTORY/mcp-request"
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"bump-smoke","version":"1.0.0"}}}' >&3
+if ! read -r -t 5 MCP_RESPONSE <"$TEMPORARY_DIRECTORY/mcp-response"; then
+  echo "MCP initialize produced no response" >&2
+  exit 1
+fi
+exec 3>&-
+wait "$MCP_SERVER_PID"
+if ! ruby -rjson -e 'response = JSON.parse(STDIN.read); abort "invalid MCP initialize response" unless response["jsonrpc"] == "2.0" && response["id"] == 1 && response.dig("result", "protocolVersion").is_a?(String) && response.dig("result", "serverInfo", "name").is_a?(String)' <<<"$MCP_RESPONSE"; then
+  echo "MCP initialize failed" >&2
+  exit 1
+fi
+
+SCRIPT_HELP_OUTPUT="$("$SCRIPT_DIRECTORY/smoke-test.sh" --help)"
+if ! grep -Fq 'Usage: smoke-test.sh [bump-binary] [bump-mcp-binary]' <<<"$SCRIPT_HELP_OUTPUT"; then
+  echo "Smoke script help does not contain its usage" >&2
+  exit 1
+fi
+if ! grep -Fq 'Options: --help  Show this help text.' <<<"$SCRIPT_HELP_OUTPUT"; then
+  echo "Smoke script help does not contain its options" >&2
+  exit 1
+fi
 
 HELP_OUTPUT="$("$BINARY_PATH" --help)"
 if ! grep -Fq "Usage: bump [options]" <<<"$HELP_OUTPUT"; then
@@ -56,9 +82,6 @@ if ! grep -Fq -- "--minimum-age, -a" <<<"$HELP_OUTPUT"; then
   echo "Help output does not document the minimum-age flag" >&2
   exit 1
 fi
-
-TEMPORARY_DIRECTORY="$(mktemp -d)"
-trap 'rm -rf "$TEMPORARY_DIRECTORY"' EXIT
 
 if (cd "$TEMPORARY_DIRECTORY" && "$BINARY_PATH" >stdout.log 2>stderr.log); then
   echo "Expected bump to fail when no dependency file exists" >&2

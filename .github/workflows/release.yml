@@ -31,6 +31,9 @@ jobs:
     - name: Build release commands
       run: make build
 
+    - name: Smoke test release commands
+      run: make smoke
+
     - name: Extract version
       id: version
       run: |
@@ -106,7 +109,7 @@ jobs:
       if: steps.check_tag.outputs.skip != 'true'
       uses: peter-evans/create-pull-request@v8
       with:
-        token: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.WORKFLOW_PAT }}
         commit-message: "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
         title: "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
         body: |

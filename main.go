@@ -15,6 +15,8 @@ import (
 )
 
 var version = shared.Version
+var checkOutdated = updater.CheckOutdated
+var updateDependencies = updater.UpdateDependencies
 
 type commandOptions struct {
 	Update                  bool
@@ -115,7 +117,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	result, err := updater.CheckOutdated(ctx, dependencies, registryType, dependencyOptions, workingDirectory, progressCallback, log)
+	result, err := checkOutdated(ctx, dependencies, registryType, dependencyOptions, workingDirectory, progressCallback, log)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 		os.Exit(1)
@@ -136,7 +138,7 @@ func main() {
 
 	if options.Update {
 		if len(result.Outdated) > 0 {
-			err := updater.UpdateDependencies(ctx, filePath, result.Outdated, registryType, dependencyOptions, workingDirectory, log)
+			err := updateDependencies(ctx, filePath, result.Outdated, registryType, dependencyOptions, workingDirectory, log)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\nError updating dependencies: %v\n", err)
 				os.Exit(1)

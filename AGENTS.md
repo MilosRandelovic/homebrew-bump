@@ -21,18 +21,18 @@ scripts/         Local and CI smoke validation
 
 ## Go and CLI conventions
 
-- `commandOptions` owns CLI-only behavior. Pass `shared.Options` intact to bump-core only for dependency parsing, checking, and update behavior; pass `output.Config` intact to terminal rendering.
+- `commandOptions` owns the complete CLI flag set because `shared.Options` is deliberately limited to bump-core dependency behavior. Pass the full `commandOptions` value through its mapping methods, then pass the resulting `shared.Options` intact to bump-core parsing, checking, and updating and the resulting `output.Config` intact to terminal rendering.
 - Name every callable parameter. Keep conventional abbreviations such as `ctx`, `err`, `ok`, `id`, `max`, `min`, `args`, `config`, and `info`; expand names that are not immediate in their scope.
 - Keep stdout for normal command output and stderr for progress and failures. Verbose diagnostics are provided through `shared.LogFunc`; pass `nil` when verbose mode is off.
 - Create a signal-aware context for registry checks and updates so interrupt and termination signals cancel in-flight work.
-- Sort dependency output by package name within each file and dependency section. Group by file, then by `dependencies`, `devDependencies`, and `peerDependencies`, and show file names only when more than one file has updates.
+- Sort outdated, skipped, and error output by package name. Group dependency output by file, then by `dependencies`, `devDependencies`, and `peerDependencies`, and show file names only when more than one file has updates.
 - Use relative display paths and semantic colors: red for major, yellow for minor, green for patch, and cyan for package names.
 - Keep public comments as useful contracts. Other comments explain safety, platform constraints, or intent the code cannot express; they do not narrate statements or record changes.
 
 ## Safety invariants
 
 - The CLI never implements registry, semver, cache, parsing, target-selection, or file-replacement rules. Change bump-core first when those contracts change.
-- `--minimum-age` and `-a` select bump-core's fixed policy of releases published more than 24 hours ago. The age remains non-configurable.
+- `--minimum-age` and `-a` select bump-core's fixed policy of releases published more than 24 hours ago. Bump-core never downgrades the current version under this policy; the age remains non-configurable.
 - `--semver` preserves compatible constraints; npm-only peer and workspace options must be rejected for Pub through bump-core validation.
 - File updates preserve constraints, formatting, hosted references, and unrelated content through bump-core. Monorepo results are grouped by each dependency's `FilePath`.
 - The smoke test never contacts a package registry. It validates built command versions, help, combined shorthand parsing, MCP startup, and missing dependency-file failure.
@@ -48,9 +48,11 @@ Users install from the tap with `brew tap MilosRandelovic/bump`, trust the formu
 
 ## Release
 
-The bump-core release workflow opens the dependency update that starts a CLI release. Merging that update to `main` builds the commands, reads the version from `bump`, creates a matching tag and GitHub source release, and opens a formula update pull request.
+The bump-core release workflow opens the dependency update that starts a CLI release. Merging that update to `main` builds the commands, runs `make smoke` as the post-merge product gate before tagging, reads the version from `bump`, creates a matching tag and GitHub source release, and opens a formula update pull request.
 
 The formula update changes only the release archive URL and checksum. Its merge is excluded from another release so the workflow cannot loop. Releases intentionally contain the repository source archives only; no binary assets or backfill workflow are required.
+
+Automated formula update pull requests use `WORKFLOW_PAT` so their branches trigger CI before merge.
 
 The formula uses the canonical `/archive/refs/tags/<tag>.tar.gz` URL. Workflow actions use their latest supported major tags, and every checkout step has an explicit name.
 

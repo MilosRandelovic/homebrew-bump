@@ -18,6 +18,8 @@ const (
 	colorCyan   = "\033[36m"
 )
 
+var lookupWorkingDirectory = os.Getwd
+
 // Config controls optional CLI output.
 type Config struct {
 	Verbose    bool
@@ -39,7 +41,7 @@ func getChangeColor(change shared.SemverChange) string {
 }
 
 func getDisplayPath(filePath string) string {
-	workingDirectory, err := os.Getwd()
+	workingDirectory, err := lookupWorkingDirectory()
 	if err != nil {
 		return filePath
 	}
