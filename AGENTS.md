@@ -23,7 +23,7 @@ scripts/         Local and CI smoke validation
 
 - `commandOptions` owns the complete CLI flag set because `shared.Options` is deliberately limited to bump-core dependency behavior. Pass the full `commandOptions` value through its mapping methods, then pass the resulting `shared.Options` intact to bump-core parsing, checking, and updating and the resulting `output.Config` intact to terminal rendering.
 - Name every callable parameter. Keep conventional abbreviations such as `ctx`, `err`, `ok`, `id`, `max`, `min`, `args`, `config`, and `info`; expand names that are not immediate in their scope.
-- Keep stdout for normal command output and stderr for progress and failures. Verbose diagnostics are provided through `shared.LogFunc`; pass `nil` when verbose mode is off.
+- Keep stdout for normal command output, including per-dependency check failures in the report. Send progress and fatal command failures to stderr. Verbose diagnostics are provided through `shared.LogFunc`; pass `nil` when verbose mode is off.
 - Create a signal-aware context for registry checks and updates so interrupt and termination signals cancel in-flight work.
 - Sort outdated, skipped, and error output by package name. Group dependency output by file, then by `dependencies`, `devDependencies`, and `peerDependencies`, and show file names only when more than one file has updates.
 - Use relative display paths and semantic colors: red for major, yellow for minor, green for patch, and cyan for package names.
@@ -35,7 +35,7 @@ scripts/         Local and CI smoke validation
 - `--minimum-age` and `-a` select bump-core's fixed policy of releases published more than 24 hours ago. Bump-core never downgrades the current version under this policy; the age remains non-configurable.
 - `--semver` preserves compatible constraints; npm-only peer and workspace options must be rejected for Pub through bump-core validation.
 - File updates preserve constraints, formatting, hosted references, and unrelated content through bump-core. Monorepo results are grouped by each dependency's `FilePath`.
-- The smoke test never contacts a package registry. It validates built command versions, help, combined shorthand parsing, MCP startup, and missing dependency-file failure.
+- The smoke test never contacts a package registry. It validates built command versions, help, combined shorthand parsing, MCP startup, and missing dependency-file failure. Bound MCP startup, initialize response, and shutdown, and terminate and reap the child after any failure so a stalled server cannot hang CI.
 - The formula installs both `bump` and `bump-mcp`, and its MCP module version must match the direct bump-core dependency in `go.mod`.
 
 ## Contracts and siblings

@@ -14,6 +14,7 @@ clean:
 
 smoke: build
 	./scripts/smoke-test.sh ./bump ./bump-mcp
+	./scripts/smoke-test-test.sh
 
 deps:
 	go mod tidy

@@ -12,7 +12,7 @@ import (
 
 func TestGetDisplayPathRetainsPathWhenWorkingDirectoryFails(t *testing.T) {
 	originalLookup := lookupWorkingDirectory
-	lookupWorkingDirectory = func() (string, error) { return "", errors.New("unavailable") }
+	lookupWorkingDirectory = func() (string, error) { return "/different/project", errors.New("unavailable") }
 	t.Cleanup(func() { lookupWorkingDirectory = originalLookup })
 
 	filePath := "/project/package.json"

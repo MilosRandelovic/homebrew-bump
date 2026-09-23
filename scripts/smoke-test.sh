@@ -62,7 +62,6 @@ ruby -rjson -ropen3 -rtimeout -e '
     Timeout.timeout(5) do
       input, output, process = Open3.popen2(ARGV.fetch(0))
       input.puts(JSON.generate(request))
-      input.close
       line = output.gets
       raise "no response" if line.nil?
       response = JSON.parse(line)
@@ -72,6 +71,7 @@ ruby -rjson -ropen3 -rtimeout -e '
         result.is_a?(Hash) && result["protocolVersion"].is_a?(String) &&
         server_info.is_a?(Hash) && server_info["name"].is_a?(String)
       raise "invalid response" unless valid
+      input.close
       raise "server exited unsuccessfully" unless process.value.success?
     end
   rescue Timeout::Error
