@@ -46,21 +46,58 @@ fi
 
 TEMPORARY_DIRECTORY="$(mktemp -d)"
 trap 'rm -rf "$TEMPORARY_DIRECTORY"' EXIT
-mkfifo "$TEMPORARY_DIRECTORY/mcp-request" "$TEMPORARY_DIRECTORY/mcp-response"
-"$MCP_BINARY_PATH" <"$TEMPORARY_DIRECTORY/mcp-request" >"$TEMPORARY_DIRECTORY/mcp-response" &
-MCP_SERVER_PID=$!
-exec 3>"$TEMPORARY_DIRECTORY/mcp-request"
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"bump-smoke","version":"1.0.0"}}}' >&3
-if ! read -r -t 5 MCP_RESPONSE <"$TEMPORARY_DIRECTORY/mcp-response"; then
-  echo "MCP initialize produced no response" >&2
-  exit 1
-fi
-exec 3>&-
-wait "$MCP_SERVER_PID"
-if ! ruby -rjson -e 'response = JSON.parse(STDIN.read); abort "invalid MCP initialize response" unless response["jsonrpc"] == "2.0" && response["id"] == 1 && response.dig("result", "protocolVersion").is_a?(String) && response.dig("result", "serverInfo", "name").is_a?(String)' <<<"$MCP_RESPONSE"; then
-  echo "MCP initialize failed" >&2
-  exit 1
-fi
+ruby -rjson -ropen3 -rtimeout -e '
+  request = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: { name: "bump-smoke", version: "1.0.0" }
+    }
+  }
+  input = output = process = nil
+  begin
+    Timeout.timeout(5) do
+      input, output, process = Open3.popen2(ARGV.fetch(0))
+      input.puts(JSON.generate(request))
+      input.close
+      line = output.gets
+      raise "no response" if line.nil?
+      response = JSON.parse(line)
+      result = response.is_a?(Hash) ? response["result"] : nil
+      server_info = result.is_a?(Hash) ? result["serverInfo"] : nil
+      valid = response.is_a?(Hash) && response["jsonrpc"] == "2.0" && response["id"] == 1 &&
+        result.is_a?(Hash) && result["protocolVersion"].is_a?(String) &&
+        server_info.is_a?(Hash) && server_info["name"].is_a?(String)
+      raise "invalid response" unless valid
+      raise "server exited unsuccessfully" unless process.value.success?
+    end
+  rescue Timeout::Error
+    warn "MCP initialize timed out"
+    exit 1
+  rescue StandardError => error
+    warn "MCP initialize failed: #{error.message}"
+    exit 1
+  ensure
+    input.close if input && !input.closed?
+    output.close if output && !output.closed?
+    if process && process.alive?
+      begin
+        Process.kill("TERM", process.pid)
+      rescue Errno::ESRCH
+      end
+      unless process.join(1)
+        begin
+          Process.kill("KILL", process.pid)
+        rescue Errno::ESRCH
+        end
+        process.join
+      end
+    end
+  end
+' "$MCP_BINARY_PATH"
 
 SCRIPT_HELP_OUTPUT="$("$SCRIPT_DIRECTORY/smoke-test.sh" --help)"
 if ! grep -Fq 'Usage: smoke-test.sh [bump-binary] [bump-mcp-binary]' <<<"$SCRIPT_HELP_OUTPUT"; then
