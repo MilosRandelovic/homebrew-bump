@@ -28,7 +28,10 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
-    - name: Build and run CLI smoke tests
+    - name: Build release commands
+      run: make build
+
+    - name: Smoke test release commands
       run: make smoke
 
     - name: Extract version
@@ -92,7 +95,7 @@ jobs:
     - name: Update Homebrew Formula
       if: steps.check_tag.outputs.skip != 'true'
       run: |
-        RELEASE_URL="https://github.com/MilosRandelovic/homebrew-bump/archive/${{ steps.version.outputs.tag }}.tar.gz"
+        RELEASE_URL="https://github.com/MilosRandelovic/homebrew-bump/archive/refs/tags/${{ steps.version.outputs.tag }}.tar.gz"
         SHA256=$(curl -sLf "$RELEASE_URL" | sha256sum | cut -d' ' -f1)
 
         sed -i "s|url \".*\"|url \"$RELEASE_URL\"|" Formula/bump.rb
@@ -106,7 +109,7 @@ jobs:
       if: steps.check_tag.outputs.skip != 'true'
       uses: peter-evans/create-pull-request@v8
       with:
-        token: ${{ secrets.WORKFLOW_PAT || secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.WORKFLOW_PAT }}
         commit-message: "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
         title: "Update Homebrew formula for release ${{ steps.version.outputs.tag }}"
         body: |

@@ -21,7 +21,7 @@ This is a thin CLI wrapper around [bump-core](https://github.com/MilosRandelovic
 
 ## Installation
 
-### Via Homebrew (Recommended)
+### Homebrew (recommended)
 
 ```bash
 brew tap MilosRandelovic/bump
@@ -34,10 +34,6 @@ brew install bump
 ```bash
 make build
 ```
-
-### Direct download
-
-Download the latest release from the [GitHub releases page](https://github.com/MilosRandelovic/homebrew-bump/releases).
 
 ## Agent access (MCP)
 
@@ -146,7 +142,7 @@ bump --version
 bump -V
 ```
 
-## Command Line Options
+## Command-line options
 
 - `--update, -u`: Update dependencies to latest versions
 - `--semver, -s`: Respect semver constraints (^, ~) and skip hardcoded versions
@@ -160,7 +156,7 @@ bump -V
 
 **Note:** Long-form flags use double dashes (`--update`), shorthand flags use single dash (`-u`). Shorthand flags can be merged (e.g., `-us` for update with semver).
 
-## Supported File Types
+## Supported file types
 
 ### package.json (npm)
 
@@ -244,6 +240,10 @@ bump-core/              (separate repo, imported as github.com/MilosRandelovic/b
 The CLI uses [spf13/pflag](https://github.com/spf13/pflag) for POSIX-compliant flag parsing with support for both long-form (`--flag`) and shorthand (`-f`) options, including merged shorthands (`-us`).
 
 A [VS Code extension](https://github.com/MilosRandelovic/vscode-bump) is also available, powered by the same bump-core library.
+
+## Release
+
+Merge a bump-core dependency update to `main` to create the matching source release. The release workflow then opens a separate formula update pull request containing the release archive URL and checksum; merge that pull request to publish the new Homebrew formula without creating another release.
 
 ## Contributing
 

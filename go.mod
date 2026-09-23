@@ -1,6 +1,6 @@
 module github.com/MilosRandelovic/homebrew-bump
 
-go 1.26.1
+go 1.26
 
 require (
 	github.com/MilosRandelovic/bump-core/v2 v2.2.0
