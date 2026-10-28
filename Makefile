@@ -1,7 +1,7 @@
 MCP_PACKAGE := github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp
 ACTIONLINT_VERSION := v1.7.12
 
-.PHONY: all build clean smoke deps install help workflow-lint
+.PHONY: all build clean smoke test-smoke deps install help workflow-lint
 
 all: build
 
@@ -14,6 +14,8 @@ clean:
 
 smoke: build
 	./scripts/smoke-test.sh ./bump ./bump-mcp
+
+test-smoke:
 	./scripts/smoke-test-test.sh
 
 deps:
@@ -31,6 +33,7 @@ help:
 	@echo "  build         - Build the application"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  smoke         - Build and run CLI smoke tests"
+	@echo "  test-smoke    - Test smoke-check guards with fixtures"
 	@echo "  deps          - Install dependencies"
 	@echo "  install       - Install binary to GOPATH/bin"
 	@echo "  workflow-lint - Validate GitHub Actions workflows"

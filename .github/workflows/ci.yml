@@ -34,6 +34,9 @@ jobs:
     - name: Build and run CLI smoke tests
       run: make smoke
 
+    - name: Test smoke-check guards
+      run: make test-smoke
+
     - name: Install ShellCheck
       run: brew install shellcheck
 

@@ -18,13 +18,12 @@ const (
 	colorCyan   = "\033[36m"
 )
 
-var lookupWorkingDirectory = os.Getwd
-
 // Config controls optional CLI output.
 type Config struct {
-	Verbose    bool
-	Semver     bool
-	MinimumAge bool
+	Verbose          bool
+	Semver           bool
+	MinimumAge       bool
+	WorkingDirectory string
 }
 
 func getChangeColor(change shared.SemverChange) string {
@@ -40,19 +39,18 @@ func getChangeColor(change shared.SemverChange) string {
 	}
 }
 
-func getDisplayPath(filePath string) string {
-	workingDirectory, err := lookupWorkingDirectory()
-	if err != nil {
+func getDisplayPath(filePath string, config Config) string {
+	if config.WorkingDirectory == "" {
 		return filePath
 	}
-	if relativePath, err := filepath.Rel(workingDirectory, filePath); err == nil {
+	if relativePath, err := filepath.Rel(config.WorkingDirectory, filePath); err == nil {
 		return relativePath
 	}
 	return filePath
 }
 
 // PrintProgressBar writes the current file's progress bar to standard error and ends the line when that file completes.
-func PrintProgressBar(progressUpdate shared.Progress) {
+func PrintProgressBar(progressUpdate shared.Progress, config Config) {
 	const barWidth = 20
 	current := progressUpdate.FileCurrent
 	total := progressUpdate.FileTotal
@@ -72,14 +70,14 @@ func PrintProgressBar(progressUpdate shared.Progress) {
 	}
 	bar += "]"
 
-	fmt.Fprintf(os.Stderr, "\r%s %s %d/%d %d%%", getDisplayPath(progressUpdate.FilePath), bar, current, total, int(progress*100))
+	fmt.Fprintf(os.Stderr, "\r%s %s %d/%d %d%%", getDisplayPath(progressUpdate.FilePath, config), bar, current, total, int(progress*100))
 	if current == total {
 		fmt.Fprintln(os.Stderr)
 	}
 }
 
 // PrintOutdatedDependencies writes color-coded updates to standard output, grouped by file and dependency type and sorted by package name.
-func PrintOutdatedDependencies(outdated []shared.OutdatedDependency) {
+func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, config Config) {
 	if len(outdated) == 0 {
 		return
 	}
@@ -100,7 +98,7 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency) {
 	for _, file := range files {
 		types := grouped[file]
 		if showFilenames {
-			fmt.Printf("\n%s:\n", getDisplayPath(file))
+			fmt.Printf("\n%s:\n", getDisplayPath(file, config))
 		}
 
 		for _, dependencyType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
@@ -186,7 +184,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, config Config) {
 		fmt.Printf("\nPackages skipped due to semver constraints:\n")
 		for _, file := range files {
 			if showFilenames {
-				fmt.Printf("\n%s:\n", getDisplayPath(file))
+				fmt.Printf("\n%s:\n", getDisplayPath(file, config))
 			}
 
 			for _, dependencyType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {

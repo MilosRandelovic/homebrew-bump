@@ -68,8 +68,10 @@ ruby -rjson -ropen3 -rtimeout -e '
       result = response.is_a?(Hash) ? response["result"] : nil
       server_info = result.is_a?(Hash) ? result["serverInfo"] : nil
       valid = response.is_a?(Hash) && response["jsonrpc"] == "2.0" && response["id"] == 1 &&
-        result.is_a?(Hash) && result["protocolVersion"].is_a?(String) &&
-        server_info.is_a?(Hash) && server_info["name"].is_a?(String)
+        result.is_a?(Hash) && result["protocolVersion"] == request[:params][:protocolVersion] &&
+        result["capabilities"].is_a?(Hash) &&
+        server_info.is_a?(Hash) && server_info["name"].is_a?(String) && !server_info["name"].empty? &&
+        server_info["version"].is_a?(String) && !server_info["version"].empty?
       raise "invalid response" unless valid
       input.close
       raise "server exited unsuccessfully" unless process.value.success?

@@ -40,11 +40,12 @@ func (options commandOptions) dependencyOptions() shared.Options {
 	}
 }
 
-func (options commandOptions) outputConfig() output.Config {
+func (options commandOptions) outputConfig(workingDirectory string) output.Config {
 	return output.Config{
-		Verbose:    options.Verbose,
-		Semver:     options.Semver,
-		MinimumAge: options.MinimumAge,
+		Verbose:          options.Verbose,
+		Semver:           options.Semver,
+		MinimumAge:       options.MinimumAge,
+		WorkingDirectory: workingDirectory,
 	}
 }
 
@@ -77,7 +78,6 @@ func main() {
 	}
 
 	dependencyOptions := options.dependencyOptions()
-	outputConfig := options.outputConfig()
 
 	var log shared.LogFunc
 	if options.Verbose {
@@ -91,6 +91,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	outputConfig := options.outputConfig(workingDirectory)
 	filePath, registryType, err := parser.AutoDetectDependencyFile(workingDirectory, log)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -112,7 +113,9 @@ func main() {
 
 	var progressCallback shared.ProgressFunc
 	if !options.Verbose {
-		progressCallback = output.PrintProgressBar
+		progressCallback = func(progress shared.Progress) {
+			output.PrintProgressBar(progress, outputConfig)
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -128,7 +131,7 @@ func main() {
 		return
 	}
 
-	output.PrintOutdatedDependencies(result.Outdated)
+	output.PrintOutdatedDependencies(result.Outdated, outputConfig)
 
 	if options.Semver {
 		output.PrintSemverSkipped(result.SemverSkipped, outputConfig)
