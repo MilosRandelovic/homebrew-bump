@@ -35,14 +35,33 @@ if [ "${1:-}" = '--version' ]; then
 fi
 echo "$$" >"$SMOKE_PID_FILE"
 case "$SMOKE_SCENARIO" in
-  invalid-response) echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":42,"serverInfo":{"name":"fixture"}}}' ;;
-  no-start) exit 1 ;;
+  no-start) IFS= read -r _; exit 1 ;;
   stalled) exec sleep 30 ;;
-  does-not-exit)
-    echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","serverInfo":{"name":"fixture"}}}'
-    exec sleep 30
-    ;;
 esac
+IFS= read -r _
+protocol_field='"protocolVersion":"2025-03-26"'
+capabilities_field='"capabilities":{}'
+name_field='"name":"fixture"'
+version_field='"version":"1.0.0"'
+case "$SMOKE_SCENARIO" in
+  invalid-response) echo '{"jsonrpc":"2.0","id":1,"result":{}}'; exit 0 ;;
+  unsupported-protocol) protocol_field='"protocolVersion":"2024-11-05"' ;;
+  protocol-wrong-type) protocol_field='"protocolVersion":42' ;;
+  protocol-absent) protocol_field='"other":"value"' ;;
+  capabilities-wrong-type) capabilities_field='"capabilities":[]' ;;
+  capabilities-absent) capabilities_field='"other":"value"' ;;
+  name-empty) name_field='"name":""' ;;
+  name-wrong-type) name_field='"name":42' ;;
+  name-absent) name_field='"other":"value"' ;;
+  version-empty) version_field='"version":""' ;;
+  version-wrong-type) version_field='"version":42' ;;
+  version-absent) version_field='"other":"value"' ;;
+esac
+printf '{"jsonrpc":"2.0","id":1,"result":{%s,%s,"serverInfo":{%s,%s}}}\n' \
+  "$protocol_field" "$capabilities_field" "$name_field" "$version_field"
+if [ "$SMOKE_SCENARIO" = 'does-not-exit' ]; then
+  exec sleep 30
+fi
 SH
 
 chmod +x "$TEMPORARY_DIRECTORY/bump" "$TEMPORARY_DIRECTORY/bump-mcp"
@@ -79,6 +98,29 @@ run_failure_case() {
 
 run_failure_case version-mismatch 'versions do not match'
 run_failure_case invalid-response 'invalid response'
+run_failure_case unsupported-protocol 'invalid response'
+run_failure_case protocol-wrong-type 'invalid response'
+run_failure_case protocol-absent 'invalid response'
+run_failure_case capabilities-wrong-type 'invalid response'
+run_failure_case capabilities-absent 'invalid response'
+run_failure_case name-empty 'invalid response'
+run_failure_case name-wrong-type 'invalid response'
+run_failure_case name-absent 'invalid response'
+run_failure_case version-empty 'invalid response'
+run_failure_case version-wrong-type 'invalid response'
+run_failure_case version-absent 'invalid response'
 run_failure_case no-start 'no response'
 run_failure_case stalled 'MCP initialize timed out'
 run_failure_case does-not-exit 'MCP initialize timed out'
+
+rm -f "$TEMPORARY_DIRECTORY/mcp.pid"
+if ! SMOKE_SCENARIO=valid SMOKE_PID_FILE="$TEMPORARY_DIRECTORY/mcp.pid" \
+  "$SCRIPT_DIRECTORY/smoke-test.sh" "$TEMPORARY_DIRECTORY/bump" "$TEMPORARY_DIRECTORY/bump-mcp" \
+  >"$TEMPORARY_DIRECTORY/stdout.log" 2>"$TEMPORARY_DIRECTORY/stderr.log"; then
+  echo "Smoke test rejected the complete valid fixture: $(<"$TEMPORARY_DIRECTORY/stderr.log")" >&2
+  exit 1
+fi
+if [ ! -f "$TEMPORARY_DIRECTORY/mcp.pid" ] || kill -0 "$(<"$TEMPORARY_DIRECTORY/mcp.pid")" 2>/dev/null; then
+  echo "Smoke test did not reap the valid fixture" >&2
+  exit 1
+fi

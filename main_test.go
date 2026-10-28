@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"syscall"
@@ -47,10 +48,15 @@ func TestOutputConfigMapsEachField(t *testing.T) {
 		{"verbose", commandOptions{Verbose: true}, output.Config{Verbose: true}},
 		{"semver", commandOptions{Semver: true}, output.Config{Semver: true}},
 		{"minimum age", commandOptions{MinimumAge: true}, output.Config{MinimumAge: true}},
+		{"working directory", commandOptions{}, output.Config{WorkingDirectory: "/test/project"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := test.input.outputConfig(); got != test.want {
+			workingDirectory := ""
+			if test.name == "working directory" {
+				workingDirectory = "/test/project"
+			}
+			if got := test.input.outputConfig(workingDirectory); got != test.want {
 				t.Fatalf("outputConfig() = %+v, want %+v", got, test.want)
 			}
 		})
@@ -71,8 +77,11 @@ func TestCLIOrchestratesParsedOptions(t *testing.T) {
 				return nil, fmt.Errorf("check received options=%+v, dependencies=%d, progress=%v, verbose=%v", options, len(dependencies), progressCallback != nil, log != nil)
 			}
 			return &shared.CheckResult{
-				Outdated:      []shared.OutdatedDependency{{BaseDependency: shared.BaseDependency{Name: "example", FilePath: "package.json", Type: shared.Dependencies, OriginalVersion: "1.0.0"}, CurrentVersion: "1.0.0", LatestVersion: "1.0.1"}},
-				SemverSkipped: []shared.SemverSkipped{{OutdatedDependency: shared.OutdatedDependency{BaseDependency: shared.BaseDependency{Name: "skipped", FilePath: "package.json", Type: shared.Dependencies, OriginalVersion: "^1.0.0"}, LatestVersion: "2.0.0"}, Reason: shared.IncompatibleWithConstraint}},
+				Outdated: []shared.OutdatedDependency{{BaseDependency: shared.BaseDependency{Name: "example", FilePath: "package.json", Type: shared.Dependencies, OriginalVersion: "1.0.0"}, CurrentVersion: "1.0.0", LatestVersion: "1.0.1"}},
+				SemverSkipped: []shared.SemverSkipped{
+					{OutdatedDependency: shared.OutdatedDependency{BaseDependency: shared.BaseDependency{Name: "skipped", FilePath: filepath.Join(workingDirectory, "package.json"), Type: shared.Dependencies, OriginalVersion: "^1.0.0"}, LatestVersion: "2.0.0"}, Reason: shared.IncompatibleWithConstraint},
+					{OutdatedDependency: shared.OutdatedDependency{BaseDependency: shared.BaseDependency{Name: "other", FilePath: filepath.Join(workingDirectory, "packages", "app", "package.json"), Type: shared.Dependencies, OriginalVersion: "^1.0.0"}, LatestVersion: "2.0.0"}, Reason: shared.IncompatibleWithConstraint},
+				},
 			}, nil
 		}
 		updateDependencies = func(ctx context.Context, filePath string, outdated []shared.OutdatedDependency, registryType shared.RegistryType, options shared.Options, workingDirectory string, log shared.LogFunc) error {
@@ -109,6 +118,9 @@ func TestCLIOrchestratesParsedOptions(t *testing.T) {
 				if !strings.Contains(string(output), expected) {
 					t.Errorf("CLI output missing %q:\n%s", expected, output)
 				}
+			}
+			if !strings.Contains(string(output), "\npackages/app/package.json:\n") || strings.Contains(string(output), directory+"/packages/app/package.json") {
+				t.Errorf("CLI did not render the configured working directory: %s", output)
 			}
 			if phase == "check" && !strings.Contains(string(output), "bump --update --semver --minimum-age") {
 				t.Errorf("CLI output did not preserve output options:\n%s", output)

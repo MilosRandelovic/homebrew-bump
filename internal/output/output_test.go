@@ -1,23 +1,30 @@
 package output
 
 import (
-	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/MilosRandelovic/bump-core/v2/shared"
 )
 
-func TestGetDisplayPathRetainsPathWhenWorkingDirectoryFails(t *testing.T) {
-	originalLookup := lookupWorkingDirectory
-	lookupWorkingDirectory = func() (string, error) { return "/different/project", errors.New("unavailable") }
-	t.Cleanup(func() { lookupWorkingDirectory = originalLookup })
-
-	filePath := "/project/package.json"
-	if got := getDisplayPath(filePath); got != filePath {
-		t.Fatalf("getDisplayPath() = %q, want %q", got, filePath)
+func TestGetDisplayPathUsesExplicitWorkingDirectory(t *testing.T) {
+	base := t.TempDir()
+	filePath := filepath.Join(base, "packages", "app", "package.json")
+	for _, test := range []struct {
+		name, filePath, workingDirectory, want string
+	}{
+		{"relative path", filePath, base, filepath.Join("packages", "app", "package.json")},
+		{"absent base", filePath, "", filePath},
+		{"incompatible path forms", "package.json", base, "package.json"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := getDisplayPath(test.filePath, Config{WorkingDirectory: test.workingDirectory}); got != test.want {
+				t.Fatalf("getDisplayPath() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
@@ -52,7 +59,7 @@ func TestPrintProgressBarUsesPerFileProgress(t *testing.T) {
 	originalStderr := os.Stderr
 	os.Stderr = writePipe
 
-	PrintProgressBar(shared.Progress{FilePath: "package.json", FileCurrent: 1, FileTotal: 2, Current: 7, Total: 20})
+	PrintProgressBar(shared.Progress{FilePath: "package.json", FileCurrent: 1, FileTotal: 2, Current: 7, Total: 20}, Config{})
 	os.Stderr = originalStderr
 	if err := writePipe.Close(); err != nil {
 		t.Fatal(err)
