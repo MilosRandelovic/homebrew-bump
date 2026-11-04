@@ -42,7 +42,10 @@ The Homebrew formula installs `bump-mcp` alongside the CLI. Register it once wit
 ```bash
 claude mcp add bump -- bump-mcp
 codex mcp add bump -- bump-mcp
+grok mcp add bump -- bump-mcp
 ```
+
+For Grok CLI, verify the connection with `grok mcp doctor bump`.
 
 The server exposes two tools:
 

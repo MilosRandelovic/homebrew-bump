@@ -17,6 +17,10 @@ class Bump < Formula
       To register the MCP server with a supported client:
         claude mcp add bump -- #{opt_bin}/bump-mcp
         codex mcp add bump -- #{opt_bin}/bump-mcp
+        grok mcp add bump -- #{opt_bin}/bump-mcp
+
+      To verify the Grok connection:
+        grok mcp doctor bump
     EOS
   end
 
