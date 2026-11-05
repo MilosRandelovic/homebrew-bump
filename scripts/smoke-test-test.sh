@@ -47,6 +47,9 @@ name_field='"name":"fixture"'
 version_field='"version":"1.0.0"'
 case "$SMOKE_SCENARIO" in
   invalid-response) echo '{"jsonrpc":"2.0","id":1,"result":{}}'; exit 0 ;;
+  response-array) echo '[]'; exit 0 ;;
+  result-array) echo '{"jsonrpc":"2.0","id":1,"result":[]}'; exit 0 ;;
+  server-info-array) echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":[]}}'; exit 0 ;;
   jsonrpc-absent) jsonrpc_field='"other":"value"' ;;
   jsonrpc-wrong) jsonrpc_field='"jsonrpc":"1.0"' ;;
   id-absent) id_field='"otherId":1' ;;
@@ -65,6 +68,9 @@ case "$SMOKE_SCENARIO" in
 esac
 printf '{%s,%s,"result":{%s,%s,"serverInfo":{%s,%s}}}\n' \
   "$jsonrpc_field" "$id_field" "$protocol_field" "$capabilities_field" "$name_field" "$version_field"
+if [ "$SMOKE_SCENARIO" = 'exit-unsuccessfully' ]; then
+  exit 1
+fi
 if [ "$SMOKE_SCENARIO" = 'does-not-exit' ]; then
   exec sleep 30
 fi
@@ -104,6 +110,9 @@ run_failure_case() {
 
 run_failure_case version-mismatch 'versions do not match'
 run_failure_case invalid-response 'invalid response'
+run_failure_case response-array 'invalid response'
+run_failure_case result-array 'invalid response'
+run_failure_case server-info-array 'invalid response'
 run_failure_case jsonrpc-absent 'invalid response'
 run_failure_case jsonrpc-wrong 'invalid response'
 run_failure_case id-absent 'invalid response'
@@ -121,6 +130,7 @@ run_failure_case version-wrong-type 'invalid response'
 run_failure_case version-absent 'invalid response'
 run_failure_case no-start 'no response'
 run_failure_case stalled 'MCP initialize timed out'
+run_failure_case exit-unsuccessfully 'server exited unsuccessfully'
 run_failure_case does-not-exit 'MCP initialize timed out'
 
 rm -f "$TEMPORARY_DIRECTORY/mcp.pid"
