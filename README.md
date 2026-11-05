@@ -248,7 +248,7 @@ A [VS Code extension](https://github.com/MilosRandelovic/vscode-bump) is also av
 
 Merge a bump-core dependency update to `main` to create the matching source release. The release workflow then opens a separate formula update pull request containing the release archive URL and checksum; merge that pull request to publish the new Homebrew formula without creating another release.
 
-Before a core API removal, merge a compatible CLI preparation while it still pins the released core version. The core release workflow builds this repository's `main`, so that preparation must precede the core release; the generated dependency-pin update follows it. PR CI runs smoke-fixture tests with `make test-smoke`; releases check only their newly built command artifacts.
+For CLI changes needed by a core API removal, follow the [bump-core release order](https://github.com/MilosRandelovic/bump-core#release).
 
 ## Contributing
 

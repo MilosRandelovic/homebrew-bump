@@ -42,7 +42,7 @@ scripts/         Local and CI smoke validation
 
 ## Contracts and siblings
 
-[bump-core](../bump-core) owns the Go API, sidecar protocol, MCP tools, version policies, and dependency target selectors. Before core removes an API this CLI uses, merge a frontend preparation that compiles against both the released and upcoming APIs while keeping the released module pin: the core release workflow builds this repository's `main`. Merge the generated dependency-pin update only after the core release completes.
+[bump-core](../bump-core) owns the Go API, sidecar protocol, MCP tools, version policies, and dependency target selectors. Follow its [release order](https://github.com/MilosRandelovic/bump-core#release) for cross-repository API changes.
 
 [vscode-bump](../vscode-bump) bundles the sidecar and consumes bump-core's newline-delimited JSON protocol. CLI-only changes here do not alter the extension.
 
@@ -50,7 +50,7 @@ Users install from the tap with `brew tap MilosRandelovic/bump`, trust the formu
 
 ## Release
 
-The bump-core release workflow opens the dependency update that starts a CLI release. Merging that update to `main` builds the commands once, checks those release artifacts with `scripts/smoke-test.sh`, reads the version from `bump`, creates a matching tag and GitHub source release, and opens a formula update pull request. `make test-smoke` exercises the smoke script's fixture guards only in PR CI; releases do not repeat those tests.
+The release workflow builds the commands once and checks the resulting artifacts with `scripts/smoke-test.sh`. PR CI runs the fixture tests with `make test-smoke`. The [release instructions](README.md#release) describe the dependency and formula updates.
 
 The formula update changes only the release archive URL and checksum. Its merge is excluded from another release so the workflow cannot loop. Releases intentionally contain the repository source archives only; no binary assets or backfill workflow are required.
 
