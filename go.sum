@@ -1,7 +1,7 @@
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
-github.com/MilosRandelovic/bump-core/v2 v2.2.0 h1:lsbYgmwFjHdj6qocIT7d6756N9BPeSQMHKO16/CajS0=
-github.com/MilosRandelovic/bump-core/v2 v2.2.0/go.mod h1:hw0IJWOp83X4gYfmeF2oiGS455O12vWmKB04sLd8IiM=
+github.com/MilosRandelovic/bump-core/v2 v2.2.1 h1:mf3lRjS2cDjeJ4r4fOrOZS6QLcGi8sCkvkuI15IiIqQ=
+github.com/MilosRandelovic/bump-core/v2 v2.2.1/go.mod h1:hw0IJWOp83X4gYfmeF2oiGS455O12vWmKB04sLd8IiM=
 github.com/google/jsonschema-go v0.4.3 h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=
 github.com/google/jsonschema-go v0.4.3/go.mod h1:r5quNTdLOYEz95Ru18zA0ydNbBuYoo9tgaYcxEYhJVE=
 github.com/modelcontextprotocol/go-sdk v1.7.0 h1:yqjY2dsbKAC0LSuWZVBMrHgiG8ukXv6NRo0JiALay44=

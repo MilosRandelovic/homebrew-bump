@@ -9,7 +9,7 @@ all: build
 # Build the CLI and MCP server
 build:
 	go build -o bump
-	go build -o bump-mcp $(MCP_PACKAGE)
+	go build -mod=mod -o bump-mcp $(MCP_PACKAGE)
 
 # Clean build artifacts
 clean:
