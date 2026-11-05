@@ -132,6 +132,59 @@ func TestCLIOrchestratesParsedOptions(t *testing.T) {
 	}
 }
 
+func TestCLIRendersNonverboseMultifileResults(t *testing.T) {
+	if os.Getenv("BUMP_TEST_MULTIFILE_PHASE") != "" {
+		checkOutdated = func(ctx context.Context, dependencies []shared.Dependency, registryType shared.RegistryType, options shared.Options, workingDirectory string, progressCallback shared.ProgressFunc, log shared.LogFunc) (*shared.CheckResult, error) {
+			if len(dependencies) != 2 || !options.Monorepo || progressCallback == nil || log != nil {
+				return nil, fmt.Errorf("check received dependencies=%d, monorepo=%v, progress=%v, verbose=%v", len(dependencies), options.Monorepo, progressCallback != nil, log != nil)
+			}
+			outdated := make([]shared.OutdatedDependency, 0, len(dependencies))
+			for index, dependency := range dependencies {
+				progressCallback(shared.Progress{FilePath: dependency.FilePath, FileCurrent: 1, FileTotal: 1, Current: index + 1, Total: len(dependencies)})
+				outdated = append(outdated, shared.OutdatedDependency{
+					BaseDependency: dependency.BaseDependency,
+					CurrentVersion: "1.0.0",
+					LatestVersion:  "1.0.1",
+				})
+			}
+			return &shared.CheckResult{Outdated: outdated}, nil
+		}
+		os.Args = []string{"bump", "--monorepo"}
+		main()
+		return
+	}
+
+	directory := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(directory, "packages", "app"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for path, content := range map[string]string{
+		"package.json":              `{"workspaces":["packages/*"],"dependencies":{"root":"1.0.0"}}`,
+		"packages/app/package.json": `{"dependencies":{"app":"1.0.0"}}`,
+	} {
+		if err := os.WriteFile(filepath.Join(directory, path), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCLIRendersNonverboseMultifileResults$")
+	command.Dir = directory
+	command.Env = append(os.Environ(), "BUMP_TEST_MULTIFILE_PHASE=1")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("CLI orchestration failed: %v\n%s", err, output)
+	}
+	for _, expected := range []string{"package.json [", "packages/app/package.json [", "package.json:", "packages/app/package.json:", "\x1b[36mroot", "\x1b[36mapp"} {
+		if !strings.Contains(string(output), expected) {
+			t.Errorf("CLI output missing %q:\n%s", expected, output)
+		}
+	}
+	if strings.Contains(string(output), directory) {
+		t.Errorf("CLI displayed an absolute path:\n%s", output)
+	}
+}
+
 func TestCLIRejectsPubPeerFlagBeforeRegistryCheck(t *testing.T) {
 	if os.Getenv("BUMP_TEST_PUB_VALIDATION") != "" {
 		checkOutdated = func(ctx context.Context, dependencies []shared.Dependency, registryType shared.RegistryType, options shared.Options, workingDirectory string, progressCallback shared.ProgressFunc, log shared.LogFunc) (*shared.CheckResult, error) {
