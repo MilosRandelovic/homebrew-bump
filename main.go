@@ -62,6 +62,7 @@ func main() {
 	pflag.BoolVarP(&options.Help, "help", "h", false, "Show help information")
 	pflag.Parse()
 
+	// Check for any remaining arguments that weren't parsed as flags
 	if pflag.NArg() > 0 {
 		fmt.Fprintf(os.Stderr, "Error: Unknown arguments: %v\nRun 'bump --help' for usage information.\n", pflag.Args())
 		os.Exit(1)
@@ -77,8 +78,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Create dependency options from the parsed flags.
 	dependencyOptions := options.dependencyOptions()
 
+	// Verbose log function for bump-core callbacks
 	var log shared.LogFunc
 	if options.Verbose {
 		log = func(format string, args ...any) {
@@ -86,6 +89,7 @@ func main() {
 		}
 	}
 
+	// Auto-detect dependency file in current directory
 	workingDirectory, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -103,6 +107,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Parse the file
 	dependencies, err := parser.ParseDependencies(filePath, registryType, dependencyOptions)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing file: %v\n", err)
@@ -120,6 +125,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Check for outdated dependencies
 	result, err := checkOutdated(ctx, dependencies, registryType, dependencyOptions, workingDirectory, progressCallback, log)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
@@ -131,14 +137,18 @@ func main() {
 		return
 	}
 
+	// Display results
 	output.PrintOutdatedDependencies(result.Outdated, outputConfig)
 
+	// Display semver skipped summary if in semver mode and there were skipped packages
 	if options.Semver {
 		output.PrintSemverSkipped(result.SemverSkipped, outputConfig)
 	}
 
+	// Display error summary if there were errors
 	output.PrintErrors(result.Errors, outputConfig)
 
+	// Update if requested
 	if options.Update {
 		if len(result.Outdated) > 0 {
 			err := updateDependencies(ctx, filePath, result.Outdated, registryType, dependencyOptions, workingDirectory, log)

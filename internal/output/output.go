@@ -10,6 +10,7 @@ import (
 	"github.com/MilosRandelovic/bump-core/v2/shared"
 )
 
+// Color constants for terminal output
 const (
 	colorReset  = "\033[0m"
 	colorRed    = "\033[31m"
@@ -26,6 +27,7 @@ type Config struct {
 	WorkingDirectory string
 }
 
+// getChangeColor returns the appropriate color for the version change type
 func getChangeColor(change shared.SemverChange) string {
 	switch change {
 	case shared.MajorChange:
@@ -39,6 +41,7 @@ func getChangeColor(change shared.SemverChange) string {
 	}
 }
 
+// getDisplayPath returns a path relative to the configured working directory when possible.
 func getDisplayPath(filePath string, config Config) string {
 	if config.WorkingDirectory == "" {
 		return filePath
@@ -117,10 +120,12 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, config Conf
 
 func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 
+	// Sort alphabetically by name
 	slices.SortFunc(outdated, func(first, second shared.OutdatedDependency) int {
 		return strings.Compare(first.Name, second.Name)
 	})
 
+	// Calculate maximum widths for proper alignment
 	maxNameWidth := 0
 	maxCurrentVersionWidth := 0
 	for _, dependency := range outdated {
@@ -132,6 +137,7 @@ func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 		}
 	}
 
+	// Add some padding
 	maxNameWidth += 2
 	maxCurrentVersionWidth += 2
 
@@ -144,10 +150,12 @@ func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 		change := shared.GetSemverChange(dependency.CurrentVersion, dependency.LatestVersion)
 		color := getChangeColor(change)
 
+		// Use the original version from the dependency struct
 		currentVersion := dependency.OriginalVersion
 		prefix := shared.GetVersionPrefix(currentVersion)
 		latestVersion := prefix + dependency.LatestVersion
 
+		// Apply color to output for better visibility
 		fmt.Printf("%s%s%-*s%s  %*s  →  %s%s%s\n",
 			indent,
 			colorCyan, maxNameWidth, dependency.Name, colorReset,
@@ -165,6 +173,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, config Config) {
 
 	if config.Verbose {
 
+		// Group by file and type, then deduplicate within each group
 		grouped := make(map[string]map[shared.DependencyType]map[string]shared.SemverSkipped)
 		files := []string{}
 		for _, skip := range semverSkipped {
@@ -187,6 +196,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, config Config) {
 				fmt.Printf("\n%s:\n", getDisplayPath(file, config))
 			}
 
+			// Display by dependency type in the same order as outdated
 			for _, dependencyType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
 				skippedByType := grouped[file][dependencyType]
 				if len(skippedByType) == 0 {
@@ -199,6 +209,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, config Config) {
 					fmt.Printf("\n%s:\n", dependencyType.String())
 				}
 
+				// Sort packages alphabetically within each type
 				names := make([]string, 0, len(skippedByType))
 				for name := range skippedByType {
 					names = append(names, name)
@@ -232,6 +243,7 @@ func PrintErrors(errors []shared.DependencyError, config Config) {
 		return
 	}
 
+	// Sort alphabetically by name
 	slices.SortFunc(errors, func(first, second shared.DependencyError) int {
 		return strings.Compare(first.Name, second.Name)
 	})

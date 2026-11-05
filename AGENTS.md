@@ -28,7 +28,7 @@ scripts/         Local and CI smoke validation
 - Sort outdated, skipped, and error output by package name. Group dependency output by file, then by `dependencies`, `devDependencies`, and `peerDependencies`, and show file names only when more than one file has updates.
 - Use relative display paths and semantic colors: red for major, yellow for minor, green for patch, and cyan for package names.
 - Resolve the working directory in `main` and pass it through `output.Config`. Terminal rendering does not query process state; tests supply their own directory through the same configuration.
-- Keep public comments as useful contracts. Other comments explain safety, platform constraints, or intent the code cannot express; they do not narrate statements or record changes.
+- Keep public comments as useful contracts. New comments explain safety, platform constraints, or intent the code cannot express; they do not narrate statements or record changes. Preserve existing comments during cleanup because they carry the author's context; update them when the associated behavior changes, and remove them only with the code they describe.
 
 ## Safety invariants
 
