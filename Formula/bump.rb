@@ -1,10 +1,10 @@
-# Documentation:
+# Formula implementation references:
 # - https://docs.brew.sh/Formula-Cookbook
 # - https://rubydoc.brew.sh/Formula
 class Bump < Formula
-  desc "A utility to check and update package dependencies"
+  desc "Check and update package dependencies"
   homepage "https://github.com/MilosRandelovic/homebrew-bump"
-  url "https://github.com/MilosRandelovic/homebrew-bump/archive/v2.2.0.tar.gz"
+  url "https://github.com/MilosRandelovic/homebrew-bump/archive/refs/tags/v2.2.0.tar.gz"
   sha256 "c031a798bedec5a31cd44b6a31f42fd89c61d00377fffb049d3f395e4bc96fcf"
   license "MIT"
 
@@ -12,8 +12,7 @@ class Bump < Formula
 
   def install
     system "go", "build", *std_go_args(output: bin/"bump"), "."
-    ENV["GOBIN"] = bin
-    system "go", "install", "github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp@v2.2.0"
+    system "go", "build", "-mod=mod", "-o", bin/"bump-mcp", "github.com/MilosRandelovic/bump-core/v2/cmd/bump-mcp"
   end
 
   def caveats
@@ -21,6 +20,10 @@ class Bump < Formula
       To register the MCP server with a supported client:
         claude mcp add bump -- #{opt_bin}/bump-mcp
         codex mcp add bump -- #{opt_bin}/bump-mcp
+        grok mcp add bump -- #{opt_bin}/bump-mcp
+
+      To verify the Grok connection:
+        grok mcp doctor bump
     EOS
   end
 

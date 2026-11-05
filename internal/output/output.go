@@ -13,11 +13,19 @@ import (
 // Color constants for terminal output
 const (
 	colorReset  = "\033[0m"
-	colorRed    = "\033[31m" // Major version changes
-	colorYellow = "\033[33m" // Minor version changes
-	colorGreen  = "\033[32m" // Patch version changes
-	colorCyan   = "\033[36m" // Package names
+	colorRed    = "\033[31m"
+	colorYellow = "\033[33m"
+	colorGreen  = "\033[32m"
+	colorCyan   = "\033[36m"
 )
+
+// Config controls optional CLI output.
+type Config struct {
+	Verbose          bool
+	Semver           bool
+	MinimumAge       bool
+	WorkingDirectory string
+}
 
 // getChangeColor returns the appropriate color for the version change type
 func getChangeColor(change shared.SemverChange) string {
@@ -33,18 +41,19 @@ func getChangeColor(change shared.SemverChange) string {
 	}
 }
 
-var workingDir, _ = os.Getwd()
-
-// getDisplayPath converts an absolute path to a relative path for display
-func getDisplayPath(filePath string) string {
-	if relativePath, err := filepath.Rel(workingDir, filePath); err == nil {
+// getDisplayPath returns a path relative to the configured working directory when possible.
+func getDisplayPath(filePath string, config Config) string {
+	if config.WorkingDirectory == "" {
+		return filePath
+	}
+	if relativePath, err := filepath.Rel(config.WorkingDirectory, filePath); err == nil {
 		return relativePath
 	}
 	return filePath
 }
 
 // PrintProgressBar writes the current file's progress bar to standard error and ends the line when that file completes.
-func PrintProgressBar(progressUpdate shared.Progress) {
+func PrintProgressBar(progressUpdate shared.Progress, config Config) {
 	const barWidth = 20
 	current := progressUpdate.FileCurrent
 	total := progressUpdate.FileTotal
@@ -64,14 +73,14 @@ func PrintProgressBar(progressUpdate shared.Progress) {
 	}
 	bar += "]"
 
-	fmt.Fprintf(os.Stderr, "\r%s %s %d/%d %d%%", getDisplayPath(progressUpdate.FilePath), bar, current, total, int(progress*100))
+	fmt.Fprintf(os.Stderr, "\r%s %s %d/%d %d%%", getDisplayPath(progressUpdate.FilePath, config), bar, current, total, int(progress*100))
 	if current == total {
-		fmt.Fprintln(os.Stderr) // New line when complete
+		fmt.Fprintln(os.Stderr)
 	}
 }
 
 // PrintOutdatedDependencies writes color-coded updates to standard output, grouped by file and dependency type and sorted by package name.
-func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options shared.Options) {
+func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, config Config) {
 	if len(outdated) == 0 {
 		return
 	}
@@ -92,7 +101,7 @@ func PrintOutdatedDependencies(outdated []shared.OutdatedDependency, options sha
 	for _, file := range files {
 		types := grouped[file]
 		if showFilenames {
-			fmt.Printf("\n%s:\n", getDisplayPath(file))
+			fmt.Printf("\n%s:\n", getDisplayPath(file, config))
 		}
 
 		for _, dependencyType := range []shared.DependencyType{shared.Dependencies, shared.DevDependencies, shared.PeerDependencies} {
@@ -157,12 +166,12 @@ func printDependencyList(outdated []shared.OutdatedDependency, indented bool) {
 
 // PrintSemverSkipped writes skipped packages to standard output.
 // Verbose mode prints sorted package details; otherwise it prints only a count and rerun hint.
-func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Options) {
+func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, config Config) {
 	if len(semverSkipped) == 0 {
 		return
 	}
 
-	if options.Verbose {
+	if config.Verbose {
 
 		// Group by file and type, then deduplicate within each group
 		grouped := make(map[string]map[shared.DependencyType]map[string]shared.SemverSkipped)
@@ -184,7 +193,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Opt
 		fmt.Printf("\nPackages skipped due to semver constraints:\n")
 		for _, file := range files {
 			if showFilenames {
-				fmt.Printf("\n%s:\n", getDisplayPath(file))
+				fmt.Printf("\n%s:\n", getDisplayPath(file, config))
 			}
 
 			// Display by dependency type in the same order as outdated
@@ -229,7 +238,7 @@ func PrintSemverSkipped(semverSkipped []shared.SemverSkipped, options shared.Opt
 
 // PrintErrors writes dependency-check failures to standard output.
 // Verbose mode prints sorted error details; otherwise it prints only a count and rerun hint.
-func PrintErrors(errors []shared.DependencyError, options shared.Options) {
+func PrintErrors(errors []shared.DependencyError, config Config) {
 	if len(errors) == 0 {
 		return
 	}
@@ -239,13 +248,13 @@ func PrintErrors(errors []shared.DependencyError, options shared.Options) {
 		return strings.Compare(first.Name, second.Name)
 	})
 
-	if options.Verbose {
+	if config.Verbose {
 		fmt.Printf("\nErrors encountered:\n")
 		for _, dependencyError := range errors {
 			fmt.Printf("  %s%s%s: %s\n", colorCyan, dependencyError.Name, colorReset, dependencyError.Error)
 		}
 	} else {
-		if options.Semver {
+		if config.Semver {
 			fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump --semver --verbose' to see the full output.\n", len(errors))
 		} else {
 			fmt.Printf("\n%d packages could not be checked due to errors. Run 'bump --verbose' to see the full output.\n", len(errors))
@@ -254,24 +263,24 @@ func PrintErrors(errors []shared.DependencyError, options shared.Options) {
 }
 
 // PrintUpdatePrompt writes the update command required to preserve the active semantic-version and minimum-age options when updates exist.
-func PrintUpdatePrompt(hasOutdated bool, options shared.Options) {
+func PrintUpdatePrompt(hasOutdated bool, config Config) {
 	if !hasOutdated {
 		return
 	}
 
 	args := []string{"--update"}
-	if options.Semver {
+	if config.Semver {
 		args = append(args, "--semver")
 	}
-	if options.EnforceMinimumReleaseAge {
+	if config.MinimumAge {
 		args = append(args, "--minimum-age")
 	}
 	fmt.Printf("\nRun 'bump %s' to apply these dependency updates.\n", strings.Join(args, " "))
 }
 
 // VerbosePrintf writes formatted text to standard output only when verbose mode is enabled.
-func VerbosePrintf(options shared.Options, format string, args ...any) {
-	if options.Verbose {
+func VerbosePrintf(config Config, format string, args ...any) {
+	if config.Verbose {
 		fmt.Printf(format, args...)
 	}
 }
