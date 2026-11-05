@@ -4,6 +4,10 @@ Starting with v2.0.0, all core logic lives in [bump-core](https://github.com/Mil
 
 This file tracks CLI-specific changes (flags, output formatting, terminal UI).
 
+## [2.2.1]
+
+- Resolve MCP dependencies when building `bump-mcp` after `go mod tidy`
+
 ## [2.2.0]
 
 - Install the bump MCP server alongside the CLI for scoped absolute, semver-compatible, and minimum-age dependency checks and updates
